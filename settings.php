@@ -18,14 +18,24 @@
  * Settings for the massactions block.
  *
  * @package    block_massaction
- * @copyright  2011 University of Minnesota
+ * @copyright  2022 ISB Bayern
+ * @author     Philipp Memmel
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
 defined('MOODLE_INTERNAL') || die;
 
-$plugin->version = 2022031500;
-$plugin->requires  = 2020061500;
-$plugin->component = 'block_massaction';
-$plugin->maturity = MATURITY_STABLE;
-$plugin->release = 'v6.0.0';
+if ($hassiteconfig) {
+
+    $ADMIN->add('blocksettings', new admin_category('block_massaction_settings',
+        new lang_string('pluginname', 'block_massaction')));
+
+    if ($ADMIN->fulltree) {
+        $settings->add(new admin_setting_configtext(
+            'block_massaction/duplicatemaxactivities',
+            new lang_string('duplicatemaxactivities', 'block_massaction'),
+            new lang_string('duplicatemaxactivities_description', 'block_massaction'),
+            5
+        ));
+    }
+}
