@@ -7,7 +7,7 @@ Go to https://moodle.org/plugins/pluginversions.php?plugin=block_massaction
 
 If you are using...
 --- Moodle 4.0+
-        Download TBD
+        Download v7 from the Moodle Plugins Directory
 --- Moodle 3.9-3.11
         Download v6 from the Moodle Plugins Directory
 --- Moodle 3.4 - 3.8
