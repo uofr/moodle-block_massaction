@@ -118,8 +118,11 @@ class block_massaction extends block_base {
             }
             if (has_capability('moodle/course:manageactivities', $context)) {
                 $actionicons['delete'] = 't/delete';
-                $actionicons['moveright'] = 't/right';
-                $actionicons['moveleft'] = 't/left';
+                if (course_get_format($COURSE->id)->uses_indentation()) {
+                    // From Moodle 4.0 on the course format has to declare if it supports indentation or not.
+                    $actionicons['moveright'] = 't/right';
+                    $actionicons['moveleft'] = 't/left';
+                }
             }
 
             $actions = [];
