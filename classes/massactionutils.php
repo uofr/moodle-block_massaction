@@ -25,7 +25,6 @@
 
 namespace block_massaction;
 
-use coding_exception;
 use dml_exception;
 use moodle_exception;
 use stdClass;
@@ -73,69 +72,5 @@ class massactionutils {
         }
         $data->modulerecords = $modulerecords;
         return $data;
-    }
-
-    /**
-     * Creates and returns an array of sections of a given course id.
-     *
-     * @param int $courseid the course id of the course to create the section data object
-     * @return array $sections the array containing all important information of the course's sections:
-     *  [ sectionnumber => [ 'number' => sectionnumber, 'name' => sectionname, 'modules' => [ moduleid1, moduleid2, ... ] ]
-     * @throws coding_exception if lang strings cannot be called
-     * @throws moodle_exception if course with given id is not found
-     */
-    public static function extract_sections_information(int $courseid): array {
-        $sectionsarray = [];
-        $modinfo = get_fast_modinfo($courseid);
-        $courseformat = $modinfo->get_course()->format;
-
-        foreach ($modinfo->get_section_info_all() as $index => $section) {
-            unset($section); // Unused and not needed.
-            $sectionentry = new stdClass();
-            $sectionentry->number = $index;
-            $sectionentry->name = get_section_name($courseid, $index);
-            // Is getting filled afterwards.
-            $sectionentry->modules = '';
-            if (empty($sectionentry->name)) {
-                if ($sectionentry->number == 0) {
-                    $sectionnameprefix = get_string('section0name', $courseformat);
-                } else {
-                    $sectionnameprefix = get_string('sectionname', $courseformat);
-                }
-                $sectionentry->name = $sectionnameprefix . ' ' . $index;
-            }
-            $sectionsarray[$index] = $sectionentry;
-        }
-        foreach ($modinfo->get_cms() as $cm) {
-            // Modules marked as deleted have to be treated like they don't exist.
-            if ($cm->deletioninprogress) {
-                continue;
-            }
-            if (empty($sectionsarray[$cm->sectionnum]->modules)) {
-                $sectionsarray[$cm->sectionnum]->modules = $cm->id;
-            } else {
-                $sectionsarray[$cm->sectionnum]->modules .= ',' . $cm->id;
-            }
-        }
-        return $sectionsarray;
-    }
-
-    /**
-     * Creates and returns an array with course module names for the webservice.
-     *
-     * @param int $courseid the course id of the course we want to retrieve the modules information of
-     * @return array the modulenames data objects: [{'modid' => MOD_ID, 'name' => MOD_NAME}, ...]
-     * @throws moodle_exception
-     */
-    public static function get_mod_names(int $courseid): array {
-        $modinfo = get_fast_modinfo($courseid);
-        $cminfos = [];
-        foreach ($modinfo->get_cms() as $cm) {
-            $cminfo = new stdClass();
-            $cminfo->modid = $cm->id;
-            $cminfo->name = $cm->get_name();
-            $cminfos[] = $cminfo;
-        }
-        return $cminfos;
     }
 }

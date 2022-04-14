@@ -22,19 +22,14 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-import checkboxManager from './checkboxmanager';
+import * as checkboxmanager from './checkboxmanager';
 import * as Str from 'core/str';
-import Ajax from 'core/ajax';
 import Pending from 'core/pending';
-
-let sectionBoxes = {};
-let isRebuilding = false;
+import {getCurrentCourseEditor} from 'core_courseformat/courseeditor';
 
 export const usedMoodleCssClasses = {
     SECTION_NAME: 'sectionname',
     MODULE_ID_PREFIX: 'module-',
-    SPINNER: 'spinner',
-    DNDUPLOAD: 'dndupload-progress-outer',
 };
 
 export const cssIds = {
@@ -78,81 +73,19 @@ const actions = {
 
 /**
  * Initialize the mass-action block.
- *
- * @param {int} courseId the id of the current course.
  */
-export const init = async(courseId) => {
-
+export const init = async() => {
     const pendingPromise = new Pending('block_massaction/init');
-    rebuildSections(courseId);
 
-    /*
-     * This is definitely not what you want to do, but there is probably no better way:
-     * Observe all changes to the DOM of the body, and filter the correct mutations to get the following events:
-     * - Drag&Drop moving of a module
-     * - Drag&Drop upload of files
-     * - Change of section names
-     * - Drag&Drop moving of sections
-     * In all cases: get new information from webservice and re-render the plugin.
-     * Care: It doesn't react to renaming of modules, because it's only relevant for name/aria-label of the
-     * checkboxes. This slight imperfection is being ignored in favour of performance.
-     */
-    const observer = new MutationObserver(function(mutations) {
-        mutations = mutations.filter(mutation => mutation.type === 'childList');
-        const mutationsSection = mutations
-            .filter(mutation => mutation.addedNodes && mutation.addedNodes.length > 0);
-        // Typical MutationObserver record pattern if two sections have been swapped:
-        // The MutationRecord contains two newly added elements, both of them have a 'sectionname' class.
-        if (mutationsSection.length === 2
-            && mutationsSection.every(mutation => mutation.target.classList.contains(usedMoodleCssClasses.SECTION_NAME))) {
-            rebuildSections(courseId);
-            // We already triggered the rebuild, no need to search for further mutation observer events.
-            return;
-        }
-
-        // Build the node tree recursively to later check if some of the objects has been removed.
-        const mutationsActivities = mutations
-            .filter(mutation => mutation.removedNodes && mutation.removedNodes.length > 0);
-        let allRemovedNodes = [];
-        mutationsActivities.forEach(item => {
-            const descendants = getAllDescendants(item.removedNodes);
-            if (descendants) {
-                allRemovedNodes = allRemovedNodes.concat(descendants);
-            }
-        });
-
-        if (allRemovedNodes.length > 0) {
-            // First remove all text nodes (nodeType 3).
-            allRemovedNodes.filter(node => node.nodeType !== 3).forEach(node => {
-                // Then check if a spinner has been removed (indicates end of drag'n'drop move and changing of section name) or
-                // if a dndupload-progress-outer item has been removed -> indicates a finished drag'n'drop file upload.
-                if (node.classList && node.classList.contains(usedMoodleCssClasses.SPINNER)
-                    || node.classList.contains(usedMoodleCssClasses.DNDUPLOAD)) {
-                    rebuildSections(courseId);
-                }
-            });
-        }
-    });
-
-    // Activate the mutation observer for tracking drag'n'drop changes.
-    // Unfortunately there seems to be some moodle JS which is loaded AFTER the readystatechange event has been set to 'completed'.
-    // Thus, we have to go for an additional timeout to wait for it.
-    document.addEventListener('readystatechange', event => {
-        if (event.target.readyState === 'complete') {
-            setTimeout(() => observer.observe(document.body, {
-                subtree: true,
-                childList: true,
-                attributes: false,
-                characterData: false
-            }), 1000);
-        }
-    });
+    const editor = getCurrentCourseEditor();
+    // Initialize the checkbox manager as soon as the courseeditor is ready.
+    editor.stateManager.getInitialPromise().then(() => checkboxmanager.initCheckboxManager()).catch();
 
     document.getElementById(cssIds.SELECT_ALL_LINK)?.addEventListener('click',
-        () => setSectionSelection(true, constants.SECTION_NUMBER_ALL_PLACEHOLDER), false);
+        () => checkboxmanager.setSectionSelection(true, constants.SECTION_NUMBER_ALL_PLACEHOLDER), false);
 
     document.getElementById(cssIds.DESELECT_ALL_LINK)?.addEventListener('click',
-        () => setSectionSelection(false, constants.SECTION_NUMBER_ALL_PLACEHOLDER), false);
+        () => checkboxmanager.setSectionSelection(false, constants.SECTION_NUMBER_ALL_PLACEHOLDER), false);
 
     document.getElementById(cssIds.HIDE_LINK)?.addEventListener('click',
         () => submitAction(actions.HIDE), false);
@@ -185,36 +118,6 @@ export const init = async(courseId) => {
 };
 
 /**
- * Select all module checkboxes in section(s).
- *
- * @param {boolean} value the checked value to set the checkboxes to
- * @param {string} sectionNumber the section number of the section which all modules should be checked/unchecked. Use "all" to
- * select/deselect modules in all sections.
- */
-export const setSectionSelection = (value, sectionNumber) => {
-    const boxIds = [];
-
-    if (typeof sectionNumber !== 'undefined' && sectionNumber === constants.SECTION_SELECT_DESCRIPTION_VALUE) {
-        // Description placeholder has been selected, do nothing.
-        return;
-    } else if (typeof sectionNumber !== 'undefined' && sectionNumber === constants.SECTION_NUMBER_ALL_PLACEHOLDER) {
-        // See if we are toggling all sections.
-        for (const sectionId in sectionBoxes) {
-            for (let j = 0; j < sectionBoxes[sectionId].length; j++) {
-                boxIds.push(sectionBoxes[sectionId][j].boxId);
-            }
-        }
-    } else {
-        // We select all boxes of the given section.
-        sectionBoxes[sectionNumber].forEach(box => boxIds.push(box.boxId));
-    }
-    // Un/check the boxes.
-    for (let i = 0; i < boxIds.length; i++) {
-        document.getElementById(boxIds[i]).checked = value;
-    }
-};
-
-/**
  * Submit the selected action to server.
  *
  * @param {string} action
@@ -226,15 +129,7 @@ const submitAction = (action) => {
         'moduleIds': []
     };
 
-    // Get the checked box IDs.
-    for (let sectionNumber in sectionBoxes) {
-        for (let i = 0; i < sectionBoxes[sectionNumber].length; i++) {
-            const checkbox = document.getElementById(sectionBoxes[sectionNumber][i].boxId);
-            if (checkbox.checked) {
-                submitData.moduleIds.push(sectionBoxes[sectionNumber][i].moduleId);
-            }
-        }
-    }
+    submitData.moduleIds = checkboxmanager.getSelectedModIds();
 
     // Verify that at least one checkbox is checked.
     if (submitData.moduleIds.length === 0) {
@@ -290,69 +185,4 @@ const displayError = (errorText) => {
         });
         return null;
     }).catch();
-};
-
-/**
- * This method rebuilds the data structure stored in 'sections'. This is neccessary whenever a drag'n'drop
- * operation is being done in the course which leads to a change of the section information. It calls a
- * webservice to retrieve the updated section (and modules) data.
- *
- * This method implements a mechanism to only send a single request at once. Multiple requests arriving while
- * the promise for the request hasn't been resolved yet are being ignored.
- *
- * @param {number} courseId the course id of the course to get the section information from the webservice
- */
-const rebuildSections = (courseId) => {
-    // Only rebuild if we're not yet trying to get the new data from the webservice.
-    if (isRebuilding) {
-        return;
-    }
-
-    isRebuilding = true;
-    // Setting a hardcoded timeout like this is ugly, but due to a hardcoded timeout in the yui library
-    // there probably is no better way to handle this.
-    setTimeout(() => {
-        const promises = Ajax.call(
-            [
-                {
-                    methodname: 'block_massaction_get_sections',
-                    args: {'courseId': courseId},
-                },
-                {
-                    methodname: 'block_massaction_get_modulesinfo',
-                    args: {'courseId': courseId},
-                }
-            ]);
-
-        Promise.all([promises[0], promises[1]]).then(data => {
-            // The array data[0] contains sections information, data[1] the module names.
-            sectionBoxes = checkboxManager(data[0], data[1]);
-            isRebuilding = false;
-            return true;
-        }).catch(() => {
-            isRebuilding = false;
-            return false;
-        });
-    }, 1000);
-};
-
-/**
- * Utility method to get an array of all descendent nodes of a given nodeList recursively.
- *
- * @param {NodeList} nodes The NodeList to convert to a flat array of nodes.
- * @return {[Node]} array of recursively found nodes.
- */
-const getAllDescendants = (nodes) => {
-    const allNodes = [];
-    const getDescendants = (node) => {
-        for (let i = 0; i < node.childNodes.length; i++) {
-            const child = node.childNodes[i];
-            getDescendants(child);
-            allNodes.push(child);
-        }
-    };
-    for (let j = 0; j < nodes.length; j++) {
-        getDescendants(nodes[j]);
-    }
-    return allNodes;
 };

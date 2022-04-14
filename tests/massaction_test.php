@@ -88,26 +88,6 @@ class massaction_test extends advanced_testcase {
         }
     }
 
-    public function test_get_mod_names(): void {
-        $modulerecords = $this->get_test_course_modules();
-        $modnames = \block_massaction\massactionutils::get_mod_names($this->course->id);
-
-        // Check if there is a modname object ['modid' => MOD_ID, 'name' => MOD_NAME] for each of the course modules in the course.
-        $func1 = function(object $modnameobject): int {
-            return $modnameobject->modid;
-        };
-        $func2 = function(object $mod): int {
-            return $mod->id;
-        };
-        $this->assertTrue(array_map($func1, $modnames) === array_values(array_map($func2, $modulerecords)));
-
-        $modinfo = get_fast_modinfo($this->course->id);
-        foreach ($modnames as $modnameobject) {
-            // Check for each given course module if the returned object contains the correct module's name.
-            $this->assertEquals($modinfo->get_cm($modnameobject->modid)->get_name(), $modnameobject->name);
-        }
-    }
-
     /**
      * Get all test course modules.
      *

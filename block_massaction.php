@@ -99,7 +99,7 @@ class block_massaction extends block_base {
             }
 
             // Initialize the JS module.
-            $this->page->requires->js_call_amd('block_massaction/massactionblock', 'init', ['courseId' => $COURSE->id]);
+            $this->page->requires->js_call_amd('block_massaction/massactionblock', 'init');
 
             $context = context_course::instance($COURSE->id);
             // Actions to be rendered later on.
