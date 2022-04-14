@@ -173,7 +173,8 @@ const addCheckboxes = () => {
  */
 const addCheckboxToModule = (sectionNumber, moduleId, moduleName) => {
     const boxId = cssIds.BOX_ID_PREFIX + moduleId;
-    const moduleElement = document.getElementById(usedMoodleCssClasses.MODULE_ID_PREFIX + moduleId);
+    const moduleElement = document.getElementById(usedMoodleCssClasses.MODULE_ID_PREFIX + moduleId)
+        .querySelector(usedMoodleCssClasses.ACTIVITY_ITEM);
 
     // Avoid creating duplicate checkboxes.
     if (document.getElementById(boxId) === null) {

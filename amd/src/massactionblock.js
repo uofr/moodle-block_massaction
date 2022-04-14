@@ -28,6 +28,7 @@ import Pending from 'core/pending';
 import {getCurrentCourseEditor} from 'core_courseformat/courseeditor';
 
 export const usedMoodleCssClasses = {
+    ACTIVITY_ITEM: '.activity-item',
     SECTION_NAME: 'sectionname',
     MODULE_ID_PREFIX: 'module-',
 };
