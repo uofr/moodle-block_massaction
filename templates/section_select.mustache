@@ -31,7 +31,8 @@
 <select id="block-massaction-control-section-list-select" name="{{#str}} selectallinsection, block_massaction {{/str}}">
     <option value="description">{{#str}} selectallinsection, block_massaction {{/str}}</option>
     {{#sections}}
-        <option id="block-massaction-control-section-list-select-option-{{number}}"
-                value="{{number}}">{{title}}</option>
+        <option id="block-massaction-control-section-list-select-option-{{number}}" value="{{number}}">
+            {{title}}
+        </option>
     {{/sections}}
 </select>
