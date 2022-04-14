@@ -146,6 +146,9 @@ export const setSectionSelection = (value, sectionNumber) => {
     for (let i = 0; i < boxIds.length; i++) {
         document.getElementById(boxIds[i]).checked = value;
     }
+    // Reset dropdown to standard placeholder so we trigger a change event when selecting a section, then deselecting
+    // everything and again select the same section.
+    document.getElementById(cssIds.SECTION_SELECT).value = constants.SECTION_SELECT_DESCRIPTION_VALUE;
 };
 
 /**
@@ -233,7 +236,7 @@ const updateSelectionAndMoveToDropdowns = (sections, sectionsUnfiltered) => {
                 Templates.replaceNode('#' + cssIds.SECTION_SELECT, html, js);
                 disableInvisibleAndEmptySections(sections);
                 // Re-register event listener.
-                document.getElementById(cssIds.SECTION_SELECT).addEventListener('click',
+                document.getElementById(cssIds.SECTION_SELECT).addEventListener('change',
                     (event) => setSectionSelection(true, event.target.value), false);
                 return true;
             })
