@@ -176,8 +176,15 @@ const addCheckboxes = () => {
  */
 const addCheckboxToModule = (sectionNumber, moduleId, moduleName) => {
     const boxId = cssIds.BOX_ID_PREFIX + moduleId;
-    const moduleElement = document.getElementById(usedMoodleCssClasses.MODULE_ID_PREFIX + moduleId)
+    let moduleElement = document.getElementById(usedMoodleCssClasses.MODULE_ID_PREFIX + moduleId)
         .querySelector(usedMoodleCssClasses.ACTIVITY_ITEM);
+    // This additional class is only needed when we are using a legacy (pre moodle 4.0) course format.
+    let additionalCssClass;
+    if (!moduleElement) {
+        // Should only happen in legacy formats (pre moodle 4.0).
+        moduleElement = document.getElementById(usedMoodleCssClasses.MODULE_ID_PREFIX + moduleId);
+        additionalCssClass = 'block-massaction-checkbox-legacy';
+    }
 
     // Avoid creating duplicate checkboxes.
     if (document.getElementById(boxId) === null) {
@@ -185,6 +192,9 @@ const addCheckboxToModule = (sectionNumber, moduleId, moduleName) => {
         const checkBoxElement = document.createElement('input');
         checkBoxElement.type = 'checkbox';
         checkBoxElement.className = cssIds.CHECKBOX_CLASS;
+        if (additionalCssClass) {
+            checkBoxElement.classList.add(additionalCssClass);
+        }
         checkBoxElement.id = boxId;
 
         if (moduleElement !== null) {
