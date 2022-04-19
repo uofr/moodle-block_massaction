@@ -19,25 +19,23 @@
     Data attributes required for JS:
     * none
     Context variables required for this template:
-    * number, name
+    * number, title
     Example context (json):
     {
         "sections": {
             "number": "0",
-            "name": "Test"
+            "title": "Test"
         }      
     }
 }}
 <select id="block-massaction-control-section-list-select"
         name="{{#str}} selectallinsection, block_massaction {{/str}}"
         aria-label="{{#str}} selectallinsection, block_massaction {{/str}}">
-    <option value="description" label="{{#str}} selectallinsection, block_massaction {{/str}}">
+    <option value="description" aria-label="{{#str}} selectallinsection, block_massaction {{/str}}">
         {{#str}} selectallinsection, block_massaction {{/str}}
     </option>
     {{#sections}}
-        <option id="block-massaction-control-section-list-select-option-{{number}}"
-                value="{{number}}"
-                label="{{title}}">
+        <option id="block-massaction-control-section-list-select-option-{{number}}" value="{{number}}">
             {{title}}
         </option>
     {{/sections}}
