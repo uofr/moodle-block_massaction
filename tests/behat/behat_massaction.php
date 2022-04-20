@@ -36,37 +36,15 @@ require_once(__DIR__ . '/../../../../lib/behat/behat_base.php');
 class behat_massaction extends behat_base {
 
     /**
-     * Checks that tiles course format is installed.
+     * Checks that a given course format is installed.
      *
-     * @Given /^tiles_course_format_is_installed$/
+     * @Given /^I installed course format "(?P<formatname>(?:[^"]|\\")*)"$/
+     * @param string $formatname the name of the format to check.
+     * @throws SkippedException if the given course format is not installed.
      */
-    public function tiles_course_format_is_installed() {
+    public function i_installed_course_format($formatname) {
         $formatplugins = core_plugin_manager::instance()->get_plugins_of_type('format');
-        if (!isset($formatplugins["tiles"])) {
-            throw new \Moodle\BehatExtension\Exception\SkippedException;
-        }
-    }
-
-    /**
-     * Checks that topcoll course format is installed.
-     *
-     * @Given /^topcoll_course_format_is_installed$/
-     */
-    public function topcoll_course_format_is_installed() {
-        $formatplugins = core_plugin_manager::instance()->get_plugins_of_type('format');
-        if (!isset($formatplugins["topcoll"])) {
-            throw new \Moodle\BehatExtension\Exception\SkippedException;
-        }
-    }
-
-    /**
-     * Checks that onetopic course format is installed.
-     *
-     * @Given /^onetopic_course_format_is_installed$/
-     */
-    public function onetopic_course_format_is_installed() {
-        $formatplugins = core_plugin_manager::instance()->get_plugins_of_type('format');
-        if (!isset($formatplugins["onetopic"])) {
+        if (!isset($formatplugins[$formatname])) {
             throw new \Moodle\BehatExtension\Exception\SkippedException;
         }
     }

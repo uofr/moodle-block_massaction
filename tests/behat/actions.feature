@@ -63,41 +63,6 @@ Feature: Check if all the different type of actions of the mass actions block wo
     And I should see "Test Activity4" in the "Topic 3" "section"
 
   @javascript
-  Scenario: Check if mass actions 'indent' and 'outdent' work
-    # We need to use a different course format which supports indentation.
-    # From moodle 4.0 on this is a feature a course format has to explicitely support.
-    # Tiles format is one of them.
-    Given tiles_course_format_is_installed
-    And the following "courses" exist:
-      | fullname          | shortname | numsections | format  |
-      | Test course Tiles | TC2       | 5           | tiles   |
-    And the following "course enrolments" exist:
-      | user     | course | role           |
-      | teacher1 | TC2    | editingteacher |
-      | student1 | TC2    | student        |
-    And the following "activities" exist:
-      | activity | course | idnumber | name           | intro                 | section |
-      | page     | TC2    | 1        | Test Activity1 | Test page description | 0       |
-      | page     | TC2    | 2        | Test Activity2 | Test page description | 1       |
-      | label    | TC2    | 3        | Test Activity3 | Label text            | 2       |
-      | page     | TC2    | 4        | Test Activity4 | Test page description | 4       |
-      | assign   | TC2    | 5        | Test Activity5 | Test page description | 4       |
-    When I log in as "teacher1"
-    And I am on "Test course" course homepage with editing mode on
-    And I add the "Mass Actions" block
-    # Everything is setup now, let's do the real test.
-    And I click on "Test Activity2 Checkbox" "checkbox"
-    And I click on "Test Activity5 Checkbox" "checkbox"
-    And I click on "Indent (move right)" "link" in the "Mass Actions" "block"
-    Then "#section-1 li.page div.mod-indent-1" "css_element" should exist
-    Then "#section-4 li.assign div.mod-indent-1" "css_element" should exist
-    When I click on "Test Activity2 Checkbox" "checkbox"
-    And I click on "Test Activity5 Checkbox" "checkbox"
-    And I click on "Outdent (move left)" "link" in the "Mass Actions" "block"
-    Then "#section-1 li.page div.mod-indent-1" "css_element" should not exist
-    Then "#section-4 li.assign div.mod-indent-1" "css_element" should not exist
-
-  @javascript
   Scenario: Check if mass action 'delete' works
     When I click on "Test Activity1 Checkbox" "checkbox"
     And I click on "Test Activity4 Checkbox" "checkbox"
