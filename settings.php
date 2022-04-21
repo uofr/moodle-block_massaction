@@ -37,5 +37,26 @@ if ($hassiteconfig) {
             new lang_string('duplicatemaxactivities_description', 'block_massaction'),
             5
         ));
+
+        $pluginmanager = \core_plugin_manager::instance();
+        $plugins = [];
+        foreach (array_keys($pluginmanager->get_installed_plugins('format')) as $plugin) {
+            $plugins[$plugin] = new lang_string('pluginname', 'format_' . $plugin);
+        }
+        // Sort alphabetically. Custom sort function needed, because lang_string is an object.
+        uasort($plugins, function($a, $b) {
+            return strcmp($a->out(), $b->out());
+        });
+
+        // These are the formats supported by the maintainer.
+        $supportedformatsbydefault = ['weeks' => 1, 'topics' => 1, 'topcoll' => 1];
+
+        $settings->add(new admin_setting_configmulticheckbox(
+            'block_massaction/applicablecourseformats',
+            new lang_string('applicablecourseformats', 'block_massaction'),
+            new lang_string('applicablecourseformats_description', 'block_massaction'),
+            $supportedformatsbydefault,
+            $plugins)
+        );
     }
 }

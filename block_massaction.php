@@ -45,13 +45,16 @@ class block_massaction extends block_base {
      * to know exactly how this works.
      *
      * @return array page-type prefix => true/false.
+     * @throws dml_exception
      */
     public function applicable_formats(): array {
-        return ['site-index' => false,
-            'course-view-weeks' => true,
-            'course-view-topics' => true,
-            'course-view-topcoll' => true
-        ];
+        $applicableformats['site-index'] = false;
+        $formats = explode(',', get_config('block_massaction', 'applicablecourseformats'));
+
+        foreach ($formats as $pluginname) {
+            $applicableformats['course-view-' . $pluginname] = true;
+        }
+        return $applicableformats;
     }
 
     /**

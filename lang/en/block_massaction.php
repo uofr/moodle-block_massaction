@@ -65,6 +65,9 @@ $string['noaction'] = 'No action specified';
 $string['noactionsavailable'] = 'You do not have the permissions to execute any of the possible operations this block is providing';
 $string['nomovingtargetselected'] = 'Please select a target section';
 $string['sectionnotexist'] = 'Target section does not exist';
+$string['applicablecourseformats'] = 'Applicable course formats';
+$string['applicablecourseformats_description'] = 'Mass Actions block will only be available for the selected course formats. '
+ . 'Preselected defaults are the ones tested and supported by the plugin maintainer. Add other formats at your own risk.';
 $string['unusable'] = 'The mass action functionality cannot be used in this course format or the current theme';
 $string['usage'] = 'Usage of the Mass Actions Block';
 $string['usage_help'] = '<p>This block allows instructors to perform actions upon multiple resources or activities in the class view, rather than having to perform repeated actions on individual items.</p>
