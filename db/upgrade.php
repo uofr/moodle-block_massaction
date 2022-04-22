@@ -48,7 +48,7 @@ function xmldb_block_massaction_upgrade($oldversion, $block): bool {
  * @throws coding_exception
  * @throws dml_exception
  */
-function add_supported_format(string $addformat): void {
+function block_massaction_add_supported_format(string $addformat): void {
     global $DB;
 
     // Get current settings to update.
@@ -85,7 +85,7 @@ function add_supported_format(string $addformat): void {
  * @throws coding_exception
  * @throws dml_exception
  */
-function remove_supported_format(string $removeformat): void {
+function block_massaction_remove_supported_format(string $removeformat): void {
     global $DB;
 
     // Get current settings to update.
