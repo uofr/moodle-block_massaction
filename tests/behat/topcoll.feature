@@ -66,11 +66,11 @@ Feature: Check if block generates all necessary checkboxes in topcoll format and
     And I click on "Open all" "text"
     And I click on "Test Activity2 Checkbox" "checkbox"
     And I click on "Test Activity5 Checkbox" "checkbox"
-    And I click on "Indent (move right)" "link" in the "Mass Actions" "block"
+    And I click on "Indent (move right)" "button" in the "Mass Actions" "block"
     Then "#section-1 li.modtype_page div.indent-1" "css_element" should exist
     Then "#section-4 li.modtype_assign div.indent-1" "css_element" should exist
     When I click on "Test Activity2 Checkbox" "checkbox"
     And I click on "Test Activity5 Checkbox" "checkbox"
-    And I click on "Outdent (move left)" "link" in the "Mass Actions" "block"
+    And I click on "Outdent (move left)" "button" in the "Mass Actions" "block"
     Then "#section-1 li.modtype_page div.indent-1" "css_element" should not exist
     Then "#section-4 li.modtype_assign div.indent-1" "css_element" should not exist

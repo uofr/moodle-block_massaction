@@ -2,12 +2,23 @@
     max-width: 400px;
 }
 
+.block-massaction-select-containing-div {
+    display: flex;
+    align-items: center;
+}
+
 /* The following adaptions of colors are needed because option elements of select cannot be styled due to
  * browser limitations.
  */
-#block-massaction-control-section-list-select {
+#block-massaction-control-section-list-select,
+#block-massaction-control-section-list-moveto,
+#block-massaction-control-section-list-duplicateto {
     background-color: transparent;
-    width: 90%;
+    width: 100%;
+}
+
+.block-massaction-section-select-help-icon {
+    padding-left: 0.3em;
 }
 
 #block-massaction-control-section-list-select option {
@@ -16,12 +27,6 @@
 
 #block-massaction-control-section-list-select option:disabled {
     color: var(--gray);
-}
-
-#block-massaction-control-section-list-moveto,
-#block-massaction-control-section-list-duplicateto {
-    background-color: transparent;
-    width: 85%;
 }
 
 #block-massaction-control-section-list-moveto option,

@@ -36,22 +36,23 @@
     }
 }}
 <div id="block-massaction" class="block-massaction" aria-label="{{#str}} pluginname, block_massaction {{/str}}">
-
     {{! Only display, if there are any actions available or if we at least can move items }}
     {{#actions.0.action}}
-        <a id="block-massaction-control-selectall" href="javascript:void(0);">
+        <button class="btn btn-link btn-sm" id="block-massaction-control-selectall">
             {{#str}} selectall, block_massaction {{/str}}
-        </a>
+        </button>
         <br/>
-        <div>
-            <form>
+        <div class="d-flex flex-row">
+            <div class="block-massaction-select-containing-div flex-grow-1">
                 {{> block_massaction/section_select}}
+            </div>
+            <div class="block-massaction-section-select-help-icon">
                 {{{sectionselecthelpicon}}}
-            </form>
+            </div>
         </div>
-        <a id="block-massaction-control-deselectall" href="javascript:void(0);">
+        <button class="btn btn-link btn-sm" id="block-massaction-control-deselectall">
             {{#str}} deselectall, block_massaction {{/str}}
-        </a><br/><br/>
+        </button><br/><br/>
 
         {{#str}} withselected, block_massaction {{/str}}:
     {{/actions.0.action}}
@@ -71,28 +72,38 @@
     <div class="block-massaction-action">
         {{#actions}}
             <div id="block-massaction-action-{{action}}">
-                <a href="javascript:void(0);">
+                <button class="btn btn-link btn-sm">
                     {{#pix}} {{icon}}, moodle, {{actiontext}} {{/pix}}&nbsp;{{actiontext}}
-                </a>
+                </button>
             </div>
         {{/actions}}
 
         {{#show_moveto_select}}
-            <form>
-                {{> block_massaction/moveto_select}}
-                <a id="block-massaction-action-moveto" href="javascript:void(0);">
-                    {{#pix}} t/right, moodle, {{#str}} action_movetosection, block_massaction{{/str}}{{/pix}}
-                </a>
-            </form>
+            <div class="d-flex flex-row">
+                <div class="block-massaction-select-containing-div flex-grow-1">
+                    {{> block_massaction/moveto_select}}
+                </div>
+                <div>
+                    <button class="btn btn-link btn-sm" id="block-massaction-action-moveto"
+                        name="move_to_section">
+                        {{#pix}} t/right, moodle, {{#str}} action_movetosection, block_massaction{{/str}}{{/pix}}
+                    </button>
+                </div>
+            </div>
         {{/show_moveto_select}}
 
        {{#show_duplicateto_select}}
-            <form>
-                {{> block_massaction/duplicateto_select}}
-                <a id="block-massaction-action-duplicateto" href="javascript:void(0);">
-                    {{#pix}} t/right, moodle, {{#str}} action_duplicatetosection, block_massaction{{/str}}{{/pix}}
-                </a>
-            </form>
+            <div class="d-flex flex-row">
+                <div class="block-massaction-select-containing-div flex-grow-1">
+                    {{> block_massaction/duplicateto_select}}
+                </div>
+                <div>
+                    <button class="btn btn-link btn-sm" id="block-massaction-action-duplicateto"
+                        name="duplicate_to_section">
+                        {{#pix}} t/right, moodle, {{#str}} action_duplicatetosection, block_massaction{{/str}}{{/pix}}
+                    </button>
+                </div>
+            </div>
         {{/show_duplicateto_select}}
     </div>
 
