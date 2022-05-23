@@ -94,7 +94,7 @@ class block_massaction extends block_base {
         if ($this->page->user_is_editing()) {
 
             $applicableformatkey = 'course-view-' . $COURSE->format;
-            $iscoursecompatible = in_array($applicableformatkey, $this->applicable_formats())
+            $iscoursecompatible = in_array($applicableformatkey, array_keys($this->applicable_formats()))
                 && $this->applicable_formats()[$applicableformatkey];
             if (!$iscoursecompatible) {
                     $this->content = new stdClass();
