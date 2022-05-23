@@ -40,7 +40,7 @@ if ($hassiteconfig) {
 
         $pluginmanager = \core_plugin_manager::instance();
         $plugins = [];
-        foreach (array_keys($pluginmanager->get_installed_plugins('format')) as $plugin) {
+        foreach (array_keys($pluginmanager->get_plugins_of_type('format')) as $plugin) {
             $plugins[$plugin] = new lang_string('pluginname', 'format_' . $plugin);
         }
         // Sort alphabetically. Custom sort function needed, because lang_string is an object.
