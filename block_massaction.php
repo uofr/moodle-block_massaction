@@ -103,6 +103,23 @@ class block_massaction extends block_base {
                     return $this->content;
             }
 
+            // Check for double instances. This usually should not be an issue, but in rare cases users manage to add
+            // two blocks to the site.
+            $massactionblockscount = 0;
+            foreach ($this->page->blocks->get_regions() as $region) {
+                foreach ($this->page->blocks->get_blocks_for_region($region) as $block) {
+                    if ($block instanceof block_massaction) {
+                        $massactionblockscount++;
+                    }
+                    if ($massactionblockscount > 1) {
+                        $this->content = new stdClass();
+                        $this->content->text = get_string('multipleinstances', 'block_massaction');
+                        $this->content->footer = '';
+                        return $this->content;
+                    }
+                }
+            }
+
             // Initialize the JS module.
             $this->page->requires->js_call_amd('block_massaction/massactionblock', 'init');
 
