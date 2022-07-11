@@ -41,6 +41,7 @@ export const cssIds = {
     MAKE_AVAILABLE_LINK: 'block-massaction-action-makeavailable',
     DUPLICATE_LINK: 'block-massaction-action-duplicate',
     DELETE_LINK: 'block-massaction-action-delete',
+    CONTENT_CHANGED_NOTIFICATION_LINK: 'block-massaction-action-contentchangednotification',
     MOVELEFT_LINK: 'block-massaction-action-moveleft',
     MOVERIGHT_LINK: 'block-massaction-action-moveright',
     MOVETO_ICON_LINK: 'block-massaction-action-moveto',
@@ -68,6 +69,7 @@ const actions = {
     DELETE: 'delete',
     MOVE_LEFT: 'moveleft',
     MOVE_RIGHT: 'moveright',
+    CONTENT_CHANGED_NOTIFICATION: 'contentchangednotification',
     MOVE_TO: 'moveto',
     DUPLICATE_TO: 'duplicateto',
 };
@@ -102,6 +104,9 @@ export const init = async() => {
 
     document.getElementById(cssIds.DELETE_LINK)?.addEventListener('click',
         () => submitAction(actions.DELETE), false);
+
+    document.getElementById(cssIds.CONTENT_CHANGED_NOTIFICATION_LINK)?.addEventListener('click',
+        () => submitAction(actions.CONTENT_CHANGED_NOTIFICATION), false);
 
     document.getElementById(cssIds.MOVELEFT_LINK)?.addEventListener('click',
         () => submitAction(actions.MOVE_LEFT), false);
@@ -144,6 +149,7 @@ const submitAction = (action) => {
         case actions.SHOW:
         case actions.MAKE_AVAILABLE:
         case actions.DUPLICATE:
+        case actions.CONTENT_CHANGED_NOTIFICATION:
         case actions.MOVE_LEFT:
         case actions.MOVE_RIGHT:
             break;

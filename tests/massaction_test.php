@@ -19,6 +19,8 @@ namespace block_massaction;
 use advanced_testcase;
 use block_massaction;
 use coding_exception;
+use core\event\course_module_updated;
+use core\task\manager;
 use dml_exception;
 use moodle_exception;
 use require_login_exception;
@@ -462,6 +464,47 @@ class massaction_test extends advanced_testcase {
         });
         foreach ($selectedmodules as $module) {
             $this->assertEquals(0, $module->indent);
+        }
+    }
+
+    /**
+     * Tests the sending of content changed notifications for multiple modules.
+     *
+     * @covers \block_massaction\actions::send_content_changed_notifications
+     * @return void
+     * @throws coding_exception
+     * @throws dml_exception
+     * @throws moodle_exception
+     */
+    public function test_mass_send_content_changed_notification(): void {
+        // Method should do nothing for empty modules array.
+        // Throwing an exception would make this whole test fail, so this is a 'valid' test.
+        block_massaction\actions::send_content_changed_notifications([]);
+
+        // Select some random course modules from different sections to be hidden.
+        $selectedmoduleids[] = get_fast_modinfo($this->course->id)->get_sections()[1][0];
+        $selectedmoduleids[] = get_fast_modinfo($this->course->id)->get_sections()[2][1];
+        $selectedmoduleids[] = get_fast_modinfo($this->course->id)->get_sections()[3][2];
+
+        $hiddenmoduleid = get_fast_modinfo($this->course->id)->get_sections()[2][1];
+        // We hide one course module to check if we do not see a notification if a module is hidden.
+        if (set_coursemodule_visible($hiddenmoduleid, 0)) {
+            course_module_updated::create_from_cm(get_coursemodule_from_id(false, $hiddenmoduleid))->trigger();
+        }
+
+        $selectedmodules = array_filter($this->get_test_course_modules(), function($module) use ($selectedmoduleids) {
+            return in_array($module->id, $selectedmoduleids);
+        });
+
+        block_massaction\actions::send_content_changed_notifications($selectedmodules);
+        $notificationtasks = manager::get_adhoc_tasks('\core_course\task\content_notification_task');
+        // There should be no notification for the hidden module, so all in all there should be just 2 notifications.
+        $this->assertEquals(2, count($notificationtasks));
+        foreach ($notificationtasks as $notificationtask) {
+            $data = $notificationtask->get_custom_data();
+            $this->assertTrue(in_array($data->cmid, $selectedmoduleids));
+            // The currently checked notification must not be a notification for the hidden module.
+            $this->assertFalse($data->cmid == $hiddenmoduleid);
         }
     }
 

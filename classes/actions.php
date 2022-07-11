@@ -27,6 +27,8 @@ namespace block_massaction;
 
 use coding_exception;
 use core\event\course_module_updated;
+use core\task\manager;
+use core_course\task\content_notification_task;
 use dml_exception;
 use moodle_exception;
 use require_login_exception;
@@ -260,6 +262,42 @@ class actions {
             }
 
             course_delete_module($cm->id, true);
+        }
+    }
+
+    /**
+     * Send content changed notification for multiple course modules.
+     *
+     * @param array $modules the modules for which a notification should be sent
+     * @throws coding_exception
+     * @throws dml_exception if we cannot read from database
+     * @throws moodle_exception if wrong module ids are being passed
+     */
+    public static function send_content_changed_notifications(array $modules): void {
+        global $DB, $USER;
+        foreach ($modules as $cm) {
+            if (!$cm = get_coursemodule_from_id('', $cm->id, 0, true)) {
+                throw new moodle_exception('invalidcoursemodule');
+            }
+
+            if (!$course = $DB->get_record('course', ['id' => $cm->course])) {
+                throw new moodle_exception('invalidcourseid');
+            }
+
+            // Schedule adhoc task for delivering the course content updated notifications. Unfortunately, there is no core lib
+            // function for this, so we have to c&p from modlib.php#393 (11.06.2022).
+            // We keep in sync with the functionality there: If a course module is hidden from course page, but available, it will
+            // trigger a notification.
+            if ($course->visible && $cm->visible) {
+                $adhoctask = new content_notification_task();
+                // Apparently 'update' just is used to show if the mod is either 'new' or 'updated' in the message which is
+                // being sent. As all modules we handle with block_massaction already exist we can safely set 'update' to 1 which
+                // means that the message will read 'course module updated' instead of 'new course module added'.
+                $adhoctask->set_custom_data(
+                    ['update' => 1, 'cmid' => $cm->id, 'courseid' => $course->id, 'userfrom' => $USER->id]);
+                $adhoctask->set_component('course');
+                manager::queue_adhoc_task($adhoctask, true);
+            }
         }
     }
 

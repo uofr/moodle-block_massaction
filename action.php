@@ -90,6 +90,10 @@ switch ($data->action) {
             block_massaction\actions::perform_deletion($modulerecords);
         }
         break;
+    case 'contentchangednotification':
+        require_capability('moodle/course:manageactivities', $context);
+        block_massaction\actions::send_content_changed_notifications($modulerecords);
+        break;
     case 'moveto':
         if (!isset($data->moveToTarget)) {
             throw new moodle_exception('missingparam', 'block_massaction');

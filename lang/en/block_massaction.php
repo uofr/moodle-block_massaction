@@ -39,6 +39,7 @@ $string['sectionselect'] = 'Section selection';
 $string['sectionselect_help'] = 'You can only select sections which include at least one course module.
 Additionally, when using the Tiles or One Topic course format you can only select sections which are currently visible.';
 
+$string['action_contentchangednotification'] = 'Send content changed notification';
 $string['action_delete'] = 'Delete';
 $string['action_duplicate'] = 'Duplicate';
 $string['action_duplicatetosection'] = 'Duplicate to section';

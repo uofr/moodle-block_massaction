@@ -146,6 +146,7 @@ class block_massaction extends block_base {
                     $actionicons['moveleft'] = 't/left';
                 }
             }
+            $actionicons['contentchangednotification'] = 't/email';
 
             $actions = [];
             foreach ($actionicons as $action => $iconpath) {
