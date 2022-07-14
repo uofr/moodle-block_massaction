@@ -61,16 +61,14 @@ $string['invalidcourseid'] = 'Invalid course ID';
 $string['jsonerror'] = 'Error coding: Invalid JSON format';
 $string['modulename'] = 'Activity name';
 $string['moduletype'] = 'Activity type';
-$string['multipleinstances'] = 'There must not be multiple instances of this block on the same page. '
-    . 'Please remove additional instances.';
+$string['multipleinstances'] = 'There must not be multiple instances of this block on the same page. <br />Please remove additional instances.';
 $string['noitemselected'] = 'Please select at least one item to apply the mass-action';
 $string['noaction'] = 'No action specified';
 $string['noactionsavailable'] = 'You do not have the permissions to execute any of the possible operations this block is providing';
 $string['nomovingtargetselected'] = 'Please select a target section';
 $string['sectionnotexist'] = 'Target section does not exist';
 $string['applicablecourseformats'] = 'Applicable course formats';
-$string['applicablecourseformats_description'] = 'Mass Actions block will only be available for the selected course formats. '
- . 'Preselected defaults are the ones tested and supported by the plugin maintainer. Add other formats at your own risk.';
+$string['applicablecourseformats_description'] = 'Mass Actions block will only be available for the selected course formats. <br />Preselected defaults are the ones tested and supported by the plugin maintainer. Add other formats at your own risk.';
 $string['unusable'] = 'The mass action functionality cannot be used in this course format or the current theme';
 $string['usage'] = 'Usage of the Mass Actions Block';
 $string['usage_help'] = '<p>This block allows instructors to perform actions upon multiple resources or activities in the class view, rather than having to perform repeated actions on individual items.</p>
