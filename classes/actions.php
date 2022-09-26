@@ -80,32 +80,31 @@ class actions {
      * @throws coding_exception
      */
     public static function set_visibility(array $modules, bool $visible, bool $visibleonpage = true) : void {
-        global $CFG, $DB;
+        global $CFG;
         require_once($CFG->dirroot . '/course/lib.php');
 
         if (empty($modules)) {
             return;
         }
 
-        $visibleint = $visible ? 1 : 0;
-        $visibleonpageint = $visibleonpage ? 1 : 0;
-
-        $courseid = reset($modules)->course;
-        $courseformat = course_get_format($courseid);
-
         foreach ($modules as $cm) {
-            if (!$section = $DB->get_record('course_sections', array('course' => $courseid, 'id' => $cm->section))) {
-                throw new moodle_exception('sectionnotexist', 'block_massaction');
-            }
-
             if ($visible && !$visibleonpage) {
                 // We want to set the visibility to 'available, but hidden', but have to respect the global config and
                 // the course format config.
-                if (empty($CFG->allowstealth) || !$courseformat->allow_stealth_module_visibility($cm, $section)) {
-                    // We silently ignore this course module it must not be set to 'available, but hidden'.
+                if (empty($CFG->allowstealth)) {
+                    // We silently ignore this course module it must not be set to 'available, but not visible on course page'.
                     continue;
                 }
             }
+
+            // We here also cover the case of a hidden section. In this case moodle only uses the attribute 'visible' to determine,
+            // if a course module is completely hidden ('visible' => 0) or 'available, but not visible on course page'
+            // ('visible' => 1). The attribute 'visibleonpage' is being ignored, so we can pass it along anyway.
+            // Because of this in case of a hidden section both actions ('show' and 'make available') lead to the same result:
+            // 'available, but not visible on course page'.
+
+            $visibleint = $visible ? 1 : 0;
+            $visibleonpageint = $visibleonpage ? 1 : 0;
             if (set_coursemodule_visible($cm->id, $visibleint, $visibleonpageint)) {
                 course_module_updated::create_from_cm(get_coursemodule_from_id(false, $cm->id))->trigger();
             }

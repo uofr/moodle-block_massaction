@@ -298,6 +298,52 @@ class massaction_test extends advanced_testcase {
             $this->assertEquals(1, $module->visible);
             $this->assertEquals(1, $module->visibleoncoursepage);
         }
+
+        // Another interesting case is when course modules are in a section which is not visible. We check this for a single
+        // course module.
+        // First of all, we allow stealth again.
+        $CFG->allowstealth = 1;
+        $moduleid = reset($selectedmoduleids);
+        $module = get_fast_modinfo($this->course)->get_cm($moduleid);
+        $this->assertEquals(1, $module->visible);
+        $this->assertEquals(1, $module->visibleoncoursepage);
+
+        // Hide section.
+        set_section_visible($this->course->id, $module->sectionnum, 0);
+        $module = get_fast_modinfo($this->course)->get_cm($moduleid);
+        // After section has been hidden the course module should also be hidden.
+        $this->assertEquals(0, $module->visible);
+        $this->assertEquals(1, $module->visibleoncoursepage);
+
+        // In case the section is hidden, moodle only knows 2 states only depending on the attribute 'visible':
+        // 'visible' => 1 means that module is 'available, but not visible on course page',
+        // 'visible' => 0 means that module is completely hidden.
+
+        // Try to set it visible.
+        actions::set_visibility([$module], true);
+        $module = get_fast_modinfo($this->course)->get_cm($moduleid);
+        // The section is still hidden, so instead it should be set to 'available, but not visible on course page'.
+        $this->assertEquals(1, $module->visible);
+        $this->assertEquals(1, $module->visibleoncoursepage);
+
+        actions::set_visibility([$module], false);
+        $module = get_fast_modinfo($this->course)->get_cm($moduleid);
+        // We make sure the module is completely hidden again.
+        $this->assertEquals(0, $module->visible);
+        $this->assertEquals(1, $module->visibleoncoursepage);
+
+        // Now we use the 'make available' feature for setting it to 'available, but not visible on course page'.
+        actions::set_visibility([$module], true, false);
+        $module = get_fast_modinfo($this->course)->get_cm($moduleid);
+        $this->assertEquals(1, $module->visible);
+        $this->assertEquals(1, $module->visibleoncoursepage);
+
+        // Just to doublecheck that a visible section behaves differently.
+        set_section_visible($this->course->id, $module->sectionnum, 1);
+        actions::set_visibility([$module], true, false);
+        $module = get_fast_modinfo($this->course)->get_cm($moduleid);
+        $this->assertEquals(1, $module->visible);
+        $this->assertEquals(0, $module->visibleoncoursepage);
     }
 
     /**
