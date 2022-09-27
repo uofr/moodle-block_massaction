@@ -17,6 +17,8 @@
 namespace block_massaction;
 
 use advanced_testcase;
+use base_plan_exception;
+use base_setting_exception;
 use block_massaction;
 use coding_exception;
 use core\event\course_module_updated;
@@ -44,6 +46,7 @@ class massaction_test extends advanced_testcase {
         $this->resetAfterTest();
 
         $teacher = $generator->create_user();
+        $this->teacher = $teacher;
         $this->course = $generator->create_course(['numsections' => 5]);
         $generator->enrol_user($teacher->id, $this->course->id, 'editingteacher');
 
@@ -412,6 +415,113 @@ class massaction_test extends advanced_testcase {
             $modinfo->get_cm($selectedmoduleids[2])->name . ' (copy)');
         $this->assertEquals($modinfo->get_cm($idsinsectionordered[9])->name,
             $modinfo->get_cm($selectedmoduleids[3])->name . ' (copy)');
+    }
+
+    /**
+     * Tests the duplicating of multiple modules to a different course.
+     *
+     * @covers \block_massaction\actions::duplicate_to_course
+     * @return void
+     * @throws base_plan_exception
+     * @throws base_setting_exception
+     * @throws coding_exception
+     * @throws dml_exception
+     * @throws moodle_exception
+     * @throws require_login_exception
+     * @throws restore_controller_exception
+     */
+    public function test_mass_duplicate_modules_to_course(): void {
+        $sourcecourseid = $this->course->id;
+        $sourcecoursemodinfo = get_fast_modinfo($sourcecourseid);
+        // The teacher in the source course should have the necessary capability to backup modules.
+        $this->assertTrue(has_capability('moodle/backup:backuptargetimport', \context_course::instance($this->course->id),
+            $this->teacher->id));
+
+        // Create target course with one additional section (section 0 does not count for that), so overall it should have
+        // 2 sections.
+        $targetcourseid = $this->setup_target_course_for_duplicating(1);
+        // Call with empty values should do nothing.
+        block_massaction\actions::duplicate_to_course([], $targetcourseid);
+        block_massaction\actions::duplicate([new \stdClass()], $targetcourseid);
+
+        // Move modules around so that they are not in id order.
+        $this->shuffle_modules();
+
+        // Select some random course modules from different sections to be duplicated.
+        $selectedmoduleids[] = get_fast_modinfo($this->course->id)->get_sections()[1][0];
+        $selectedmoduleids[] = get_fast_modinfo($this->course->id)->get_sections()[1][1];
+        $selectedmoduleids[] = get_fast_modinfo($this->course->id)->get_sections()[3][0];
+        $selectedmoduleids[] = get_fast_modinfo($this->course->id)->get_sections()[3][2];
+
+        $selectedmodules = array_filter($this->get_test_course_modules(), function($module) use ($selectedmoduleids) {
+            return in_array($module->id, $selectedmoduleids);
+        });
+
+        $targetcoursemodinfo = get_fast_modinfo($targetcourseid);
+        $this->assertCount(2, $targetcoursemodinfo->get_section_info_all());
+
+        // We first test, if course modules are being properly restored to the section numbers they have in the source course.
+        block_massaction\actions::duplicate_to_course($selectedmodules, $targetcourseid);
+
+        // The duplicated course module with the highest source section number is in section 3, so the target course
+        // now should have 4 sections (including section 0), because missing sections should have been added.
+        $targetcoursemodinfo = get_fast_modinfo($targetcourseid);
+        $this->assertCount(4, $targetcoursemodinfo->get_section_info_all());
+        $duplicatedmoduleids[] = $targetcoursemodinfo->get_sections()[1][0];
+        $duplicatedmoduleids[] = $targetcoursemodinfo->get_sections()[1][1];
+        $duplicatedmoduleids[] = $targetcoursemodinfo->get_sections()[3][0];
+        // There were no course modules in 4th section yet, so the duplicated course modules are right behind each other with
+        // no module in between.
+        $duplicatedmoduleids[] = $targetcoursemodinfo->get_sections()[3][1];
+        // To check if duplication has worked we just compare the names of the modules.
+        for ($i = 0; $i < count($duplicatedmoduleids); $i++) {
+            $this->assertEquals($targetcoursemodinfo->get_cm($duplicatedmoduleids[$i])->name,
+                $sourcecoursemodinfo->get_cm($selectedmoduleids[$i])->name);
+        }
+
+        // We now test duplicating to a target section.
+        $targetsectionnum = 2;
+        $targetcourseid = $this->setup_target_course_for_duplicating(3);
+        $targetcoursemodinfo = get_fast_modinfo($targetcourseid);
+        $modulescount = count($targetcoursemodinfo->get_instances());
+        block_massaction\actions::duplicate_to_course($selectedmodules, $targetcourseid, 7);
+        $targetcoursemodinfo = get_fast_modinfo($targetcourseid);
+        // Assert nothing happened and no modules have been duplicated.
+        $this->assertCount($modulescount, $targetcoursemodinfo->get_instances());
+        // Also, no new sections should have been generated.
+        $this->assertCount(4, $targetcoursemodinfo->get_section_info_all());
+
+        // Now let's duplicate.
+        block_massaction\actions::duplicate_to_course($selectedmodules, $targetcourseid, $targetsectionnum);
+        $targetcoursemodinfo = get_fast_modinfo($targetcourseid);
+        // No new sections should have been generated.
+        $this->assertCount(4, $targetcoursemodinfo->get_section_info_all());
+        // To check if duplication has worked we just compare the names of the modules.
+        for ($i = 0; $i < count($selectedmoduleids); $i++) {
+            // Now all duplicated modules should be in section 2.
+            $this->assertEquals($targetcoursemodinfo->get_cm($targetcoursemodinfo->get_sections()[2][$i])->name,
+                $sourcecoursemodinfo->get_cm($selectedmoduleids[$i])->name);
+        }
+    }
+
+    /**
+     * Helper function to set up a target course with correct capabilities and specific count of sections.
+     *
+     * @param int $numsections number of additional sections (aside from section 0) the course should have
+     * @return int id of the newly created course
+     * @throws coding_exception
+     * @throws dml_exception
+     */
+    private function setup_target_course_for_duplicating(int $numsections = 5): int {
+        global $DB;
+
+        $targetcourseid = $this->getDataGenerator()->create_course(['numsections' => $numsections])->id;
+        $editingteacherrole = $DB->get_record('role', ['shortname' => 'editingteacher']);
+        $this->getDataGenerator()->enrol_user($this->teacher->id, $targetcourseid, $editingteacherrole->id);
+        // The teacher in the target course should have the necessary capability to restore modules.
+        $this->assertTrue(has_capability('moodle/restore:restoretargetimport', \context_course::instance($targetcourseid),
+            $this->teacher->id));
+        return $targetcourseid;
     }
 
     /**

@@ -138,6 +138,9 @@ class block_massaction extends block_base {
                     && has_capability('moodle/restore:restoretargetimport', $context)) {
                 $actionicons['duplicate'] = 't/copy';
             }
+            if (has_capability('moodle/backup:backuptargetimport', $context)) {
+                $actionicons['duplicatetocourse'] = 't/copy';
+            }
             if (has_capability('moodle/course:manageactivities', $context)) {
                 $actionicons['delete'] = 't/delete';
                 if (course_get_format($COURSE->id)->uses_indentation()) {

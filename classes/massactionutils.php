@@ -25,8 +25,16 @@
 
 namespace block_massaction;
 
+use backup;
+use backup_controller;
+use base_plan_exception;
+use base_setting_exception;
+use coding_exception;
+use context_module;
 use dml_exception;
 use moodle_exception;
+use restore_controller;
+use restore_controller_exception;
 use stdClass;
 
 /**
@@ -72,5 +80,85 @@ class massactionutils {
         }
         $data->modulerecords = $modulerecords;
         return $data;
+    }
+
+    /**
+     * This duplicates a course module to a *different* course.
+     *
+     * This function is mainly copied from 'duplicate_module' from /course/lib.php. Unfortunately, it seems that this function
+     * was once intended to also be able to duplicate a module to another course, but mid-function it started to be specific to
+     * the course the source module is part of.
+     *
+     * @param object $course course object.
+     * @param object $cm course module object to be duplicated.
+     * @return int id of the duplicated course module
+     * @throws base_plan_exception
+     * @throws base_setting_exception
+     * @throws coding_exception
+     * @throws restore_controller_exception
+     * @throws moodle_exception
+     */
+    public static function duplicate_cm_to_course(object $course, object $cm): int {
+        global $CFG, $USER;
+        require_once($CFG->dirroot . '/backup/util/includes/backup_includes.php');
+        require_once($CFG->dirroot . '/backup/util/includes/restore_includes.php');
+        require_once($CFG->libdir . '/filelib.php');
+
+        $a = new stdClass();
+        $a->modtype = get_string('modulename', $cm->modname);
+        $a->modname = format_string($cm->name);
+
+        if (!plugin_supports('mod', $cm->modname, FEATURE_BACKUP_MOODLE2)) {
+            throw new moodle_exception('duplicatenosupport', 'error', '', $a);
+        }
+
+        // Backup the activity.
+
+        $bc = new backup_controller(backup::TYPE_1ACTIVITY, $cm->id, backup::FORMAT_MOODLE,
+            backup::INTERACTIVE_NO, backup::MODE_IMPORT, $USER->id);
+
+        $backupid = $bc->get_backupid();
+        $backupbasepath = $bc->get_plan()->get_basepath();
+
+        $bc->execute_plan();
+
+        $bc->destroy();
+
+        // Restore the backup immediately.
+        $rc = new restore_controller($backupid, $course->id,
+            backup::INTERACTIVE_NO, backup::MODE_IMPORT, $USER->id, backup::TARGET_CURRENT_ADDING);
+
+        // Make sure that the restore_general_groups setting is always enabled when duplicating an activity.
+        $plan = $rc->get_plan();
+        $groupsetting = $plan->get_setting('groups');
+        if (empty($groupsetting->get_value())) {
+            $groupsetting->set_value(true);
+        }
+
+        $cmcontext = context_module::instance($cm->id);
+        if (!$rc->execute_precheck()) {
+            $precheckresults = $rc->get_precheck_results();
+            if (is_array($precheckresults) && !empty($precheckresults['errors'])) {
+                if (empty($CFG->keeptempdirectoriesonbackup)) {
+                    fulldelete($backupbasepath);
+                }
+            }
+        }
+
+        $rc->execute_plan();
+
+        // Now a bit hacky part follows - we try to get the cmid of the newly
+        // restored copy of the module.
+        $newcmid = null;
+        $tasks = $rc->get_plan()->get_tasks();
+        foreach ($tasks as $task) {
+            if (is_subclass_of($task, 'restore_activity_task')) {
+                if ($task->get_old_contextid() == $cmcontext->id) {
+                    $newcmid = $task->get_moduleid();
+                    break;
+                }
+            }
+        }
+        return $newcmid;
     }
 }

@@ -22,6 +22,8 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
+use block_massaction\actions;
+use block_massaction\form\course_select_form;
 use block_massaction\task\duplicate_task;
 use core\output\notification;
 use core\task\manager;
@@ -44,6 +46,10 @@ $modulerecords = $data->modulerecords;
 
 $context = $context->get_course_context();
 // Dispatch the submitted action.
+
+// Redirect to course by default.
+$redirect = true;
+
 switch ($data->action) {
     case 'moveleft':
         require_capability('moodle/course:manageactivities', $context);
@@ -85,6 +91,7 @@ switch ($data->action) {
     case 'delete':
         require_capability('moodle/course:manageactivities', $context);
         if (!$deletionconfirmed) {
+            $redirect = false;
             block_massaction\actions::print_deletion_confirmation($modulerecords, $massactionrequest, $instanceid, $returnurl);
         } else {
             block_massaction\actions::perform_deletion($modulerecords);
@@ -118,11 +125,73 @@ switch ($data->action) {
             block_massaction\actions::duplicate($modulerecords, $data->duplicateToTarget);
         }
         break;
+    case 'duplicatetocourse':
+        $PAGE->set_context($context);
+        $PAGE->set_url($CFG->wwwroot . '/blocks/massaction/action.php');
+        $targetcourseid = optional_param('targetcourseid', 0, PARAM_INT);
+
+        $options = [
+            'request' => $massactionrequest,
+            'instance_id' => $instanceid,
+            'return_url' => $returnurl,
+            'sourcecourseid' => $context->instanceid
+        ];
+
+        $courseselectform = new course_select_form(null, $options);
+        if ($courseselectform->is_cancelled()) {
+            redirect($returnurl);
+        }
+        if (empty($targetcourseid)) {
+            $redirect = false;
+            actions::print_course_select_form($courseselectform);
+        } else {
+            $options['targetcourseid'] = $targetcourseid;
+
+            require_capability('moodle/backup:backuptargetimport', $context);
+            require_capability('moodle/restore:restoretargetimport', context_course::instance($targetcourseid));
+
+            $sectionselectform = new block_massaction\form\section_select_form(null, $options);
+            if ($sectionselectform->is_cancelled()) {
+                $redirect = false;
+                // Show the course selector.
+                actions::print_course_select_form($courseselectform);
+                break;
+            } else if ($data = $sectionselectform->get_data()) {
+
+                // We validate the section number and default to 'same section than source course' if it is not a proper section
+                // number.
+                $targetsectionnum = property_exists($data, 'targetsectionnum') && is_numeric($data->targetsectionnum)
+                    ? $data->targetsectionnum : -1;
+
+                if (get_config('block_massaction', 'duplicatemaxactivities') < count($modulerecords)) {
+                    $duplicatetask = new duplicate_task();
+                    $duplicatetask->set_userid($USER->id);
+                    $duplicatetask->set_custom_data(['modules' => $modulerecords, 'sectionnum' => $targetsectionnum,
+                        'courseid' => $targetcourseid]);
+                    manager::queue_adhoc_task($duplicatetask);
+                    redirect($returnurl, get_string('backgroundtaskinformation', 'block_massaction'), null,
+                        notification::NOTIFY_SUCCESS);
+                } else {
+                    block_massaction\actions::duplicate_to_course($modulerecords, $targetcourseid, $targetsectionnum);
+                }
+
+                redirect($returnurl, get_string('actionexecuted', 'block_massaction'), null,
+                    notification::NOTIFY_SUCCESS);
+
+            } else {
+                $redirect = false;
+                actions::print_section_select_form($sectionselectform);
+            }
+        }
+        break;
     default:
         throw new moodle_exception('invalidaction', 'block_massaction', $data->action);
 }
 
-if ($data->action !== "delete" || $deletionconfirmed) {
+if ($redirect) {
     // Redirect back to the previous page.
-    redirect($returnurl);
+    // If an error has occurred, the action handler functions already should have thrown an exception to the user, so if we get to
+    // this point in the code, the demanded action should have been successful.
+    redirect($returnurl, get_string('actionexecuted', 'block_massaction'), null,
+        notification::NOTIFY_SUCCESS);
 }

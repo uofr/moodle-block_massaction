@@ -46,6 +46,7 @@ export const cssIds = {
     MOVERIGHT_LINK: 'block-massaction-action-moveright',
     MOVETO_ICON_LINK: 'block-massaction-action-moveto',
     DUPLICATETO_ICON_LINK: 'block-massaction-action-duplicateto',
+    DUPLICATE_TO_COURSE_ICON_LINK: 'block-massaction-action-duplicatetocourse',
     SECTION_SELECT: 'block-massaction-control-section-list-select',
     MOVETO_SELECT: 'block-massaction-control-section-list-moveto',
     DUPLICATETO_SELECT: 'block-massaction-control-section-list-duplicateto',
@@ -72,6 +73,7 @@ const actions = {
     CONTENT_CHANGED_NOTIFICATION: 'contentchangednotification',
     MOVE_TO: 'moveto',
     DUPLICATE_TO: 'duplicateto',
+    DUPLICATE_TO_COURSE: 'duplicatetocourse',
 };
 
 /**
@@ -120,6 +122,9 @@ export const init = async() => {
     document.getElementById(cssIds.DUPLICATETO_ICON_LINK)?.addEventListener('click',
         () => submitAction(actions.DUPLICATE_TO), false);
 
+    document.getElementById(cssIds.DUPLICATE_TO_COURSE_ICON_LINK)?.addEventListener('click',
+        () => submitAction(actions.DUPLICATE_TO_COURSE), false);
+
     pendingPromise.resolve();
 };
 
@@ -149,13 +154,11 @@ const submitAction = (action) => {
         case actions.SHOW:
         case actions.MAKE_AVAILABLE:
         case actions.DUPLICATE:
+        case actions.DUPLICATE_TO_COURSE:
         case actions.CONTENT_CHANGED_NOTIFICATION:
         case actions.MOVE_LEFT:
         case actions.MOVE_RIGHT:
-            break;
-
         case actions.DELETE:
-            // Confirm.
             break;
 
         case actions.MOVE_TO:

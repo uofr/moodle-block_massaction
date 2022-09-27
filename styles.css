@@ -77,3 +77,15 @@
     position: absolute;
     transform: translate(0.4rem, 1.4rem);
 }
+
+.block-massaction-courseselectbox,
+.block-massaction-sectionselectbox {
+    display: flex;
+    justify-content: center;
+    min-height: 60vh;
+}
+
+.block-massaction-courseselectbox form,
+.block-massaction-sectionselectbox form {
+    max-width: 600px;
+}

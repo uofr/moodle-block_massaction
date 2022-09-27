@@ -25,7 +25,12 @@
 
 namespace block_massaction;
 
+use base_plan_exception;
+use base_setting_exception;
+use block_massaction\form\course_select_form;
+use block_massaction\form\section_select_form;
 use coding_exception;
+use context_course;
 use core\event\course_module_updated;
 use core\task\manager;
 use core_course\task\content_notification_task;
@@ -50,7 +55,7 @@ class actions {
      * @param int $amount 1 for indent, -1 for outdent, other values are not permitted
      * @throws dml_exception if database write fails
      */
-    public static function adjust_indentation(array $modules, int $amount) : void {
+    public static function adjust_indentation(array $modules, int $amount): void {
         global $DB;
         if (empty($modules) || abs($amount) != 1) {
             return;
@@ -79,7 +84,7 @@ class actions {
      *  students on the course page
      * @throws coding_exception
      */
-    public static function set_visibility(array $modules, bool $visible, bool $visibleonpage = true) : void {
+    public static function set_visibility(array $modules, bool $visible, bool $visibleonpage = true): void {
         global $CFG;
         require_once($CFG->dirroot . '/course/lib.php');
 
@@ -120,12 +125,12 @@ class actions {
      * @throws require_login_exception if we cannot determine the correct context
      * @throws restore_controller_exception If there is an error while duplicating
      */
-    public static function duplicate(array $modules, $sectionnumber = false) : void {
+    public static function duplicate(array $modules, $sectionnumber = false): void {
         global $CFG, $DB;
         require_once($CFG->dirroot . '/course/lib.php');
         require_once($CFG->dirroot . '/lib/modinfolib.php');
         if (empty($modules) || !reset($modules)
-                || !property_exists(reset($modules), 'course')) {
+            || !property_exists(reset($modules), 'course')) {
             return;
         }
 
@@ -165,6 +170,119 @@ class actions {
     }
 
     /**
+     * Duplicates multiple modules to a specified target course into a specified target section.
+     *
+     * @param array $modules Array of course module records
+     * @param int $targetcourseid course id of the course to duplicate the modules to
+     * @param int $sectionnum section number of the section where the modules should be duplicated to. The default is -1 which
+     *  means that the duplicated modules will appear in the section they have in the source course. If these sections do not exist
+     *  they will be added to the target course.
+     *
+     * @throws coding_exception
+     * @throws restore_controller_exception
+     * @throws base_setting_exception
+     * @throws base_plan_exception
+     * @throws moodle_exception
+     */
+    public static function duplicate_to_course(array $modules, int $targetcourseid, int $sectionnum = -1): void {
+        global $CFG;
+        require_once($CFG->dirroot . '/course/lib.php');
+        require_once($CFG->dirroot . '/lib/modinfolib.php');
+        if (empty($modules) || !reset($modules)
+            || !property_exists(reset($modules), 'course')) {
+            return;
+        }
+        $sourcecourseid = reset($modules)->course;
+        $sourcecoursecontext = context_course::instance($sourcecourseid);
+        $targetcoursecontext = context_course::instance($targetcourseid);
+
+        if (!has_capability('moodle/backup:backuptargetimport', $sourcecoursecontext)) {
+            throw new required_capability_exception($sourcecoursecontext,
+                'moodle/backup:backuptargetimport', 'nocaptobackup', 'block_massaction');
+        }
+        if (!has_capability('moodle/restore:restoretargetimport', $targetcoursecontext)) {
+            throw new required_capability_exception($targetcoursecontext,
+                'moodle/restore:restoretargetimport', 'nocaptorestore', 'block_massaction');
+        }
+
+        $sourcemodinfo = get_fast_modinfo($sourcecourseid);
+        $targetmodinfo = get_fast_modinfo($targetcourseid);
+
+        // If a the target section number has been specified and there is no such target section, we do nothing.
+        // This should have been prevented by the UI anyway, but we want to be extra safe here.
+        if ($sectionnum != -1 && $sectionnum > count($targetmodinfo->get_section_info_all()) - 1) {
+            return;
+        }
+
+        if ($sectionnum == -1) {
+            // In case no target section is specified we make sure that enough sections in the target course exist before
+            // duplicating, so each course module will be restored to the section number it has in the source course.
+            $sourcecoursemaxsectionnum = max(array_map(function($mod) use ($sourcemodinfo) {
+                return $sourcemodinfo->get_cm($mod->id)->sectionnum;
+            }, $modules));
+            // We need to subtract 1 because there is section 0.
+            $targetcoursemaxsectionnum = count($targetmodinfo->get_section_info_all()) - 1;
+
+            for ($i = 0; $i < $sourcecoursemaxsectionnum - $targetcoursemaxsectionnum; $i++) {
+                course_create_section($targetcourseid);
+            }
+        }
+
+        $idsincourseorder = self::sort_course_order($modules);
+        // We now duplicate the modules in the order they have in the course. That way the duplicated modules will be correctly
+        // sorted by their id:
+        // Let order of mods in a section be mod1, mod2, mod3, mod4, mod5. If we duplicate mod2, mod4, the order afterwards will be
+        // mod1, mod2, mod3, mod4, mod5, mod2(dup), mod4(dup).
+        $duplicatedmods = [];
+        foreach ($idsincourseorder as $cmid) {
+            $duplicatedmod = massactionutils::duplicate_cm_to_course($targetmodinfo->get_course(), $sourcemodinfo->get_cm($cmid));
+            $duplicatedmods[] = $duplicatedmod;
+        }
+
+        // We need to reload new course structure.
+        $targetmodinfo = get_fast_modinfo($targetcourseid);
+        $targetsection = $targetmodinfo->get_section_info($sectionnum);
+        if ($sectionnum != -1) {
+            // A target section has been specified, so we have to move the course modules.
+            foreach ($duplicatedmods as $modid) {
+                moveto_module($targetmodinfo->get_cm($modid), $targetsection);
+            }
+        }
+    }
+
+    /**
+     * Prints the course select form.
+     *
+     * @param course_select_form $courseselectform
+     * @return void
+     */
+    public static function print_course_select_form(course_select_form $courseselectform): void {
+        global $OUTPUT;
+        // Show the course selector.
+        echo $OUTPUT->header();
+        echo $OUTPUT->box_start('generalbox block-massaction-courseselectbox', 'block_massaction-course-select-box');
+        $courseselectform->display();
+        echo $OUTPUT->box_end();
+        echo $OUTPUT->footer();
+    }
+
+    /**
+     * Prints the section select form.
+     *
+     * @param section_select_form $sectionselectform
+     * @return void
+     */
+    public static function print_section_select_form(section_select_form $sectionselectform): void {
+        global $OUTPUT;
+        // Show the section selector.
+        echo $OUTPUT->header();
+        echo $OUTPUT->box_start('generalbox block-massaction-sectionselectbox', 'block_massaction-section-select-box');
+        $sectionselectform->display();
+        echo $OUTPUT->box_end();
+        echo $OUTPUT->footer();
+    }
+
+    /**
      * Print out the list of course-modules to be deleted for confirmation.
      *
      * @param array $modules the modules which should be deleted
@@ -178,7 +296,7 @@ class actions {
      * @throws required_capability_exception
      */
     public static function print_deletion_confirmation(array $modules, string $massactionrequest,
-                                                       int $instanceid, string $returnurl) : void {
+        int $instanceid, string $returnurl): void {
         global $DB, $PAGE, $OUTPUT, $CFG;
         $modulelist = [];
 
@@ -193,7 +311,7 @@ class actions {
                 throw new moodle_exception('invalidcourseid');
             }
 
-            $context = \context_course::instance($course->id);
+            $context = context_course::instance($course->id);
             require_capability('moodle/course:manageactivities', $context);
             $modulelist[] = ['moduletype' => get_string('modulename', $cm->modname), 'modulename' => $cm->name];
         }
@@ -239,7 +357,7 @@ class actions {
      * @throws dml_exception if we cannot read from database
      * @throws moodle_exception
      */
-    public static function perform_deletion(array $modules) : void {
+    public static function perform_deletion(array $modules): void {
         global $CFG, $DB;
         require_once($CFG->dirroot . '/course/lib.php');
 
@@ -342,9 +460,6 @@ class actions {
         }
 
         $courseid = reset($modules)->course;
-
-        // Needed to set the correct context.
-        require_login($courseid);
 
         $modinfo = get_fast_modinfo($courseid);
 
