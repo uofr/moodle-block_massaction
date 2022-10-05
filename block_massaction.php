@@ -97,10 +97,10 @@ class block_massaction extends block_base {
             $iscoursecompatible = in_array($applicableformatkey, array_keys($this->applicable_formats()))
                 && $this->applicable_formats()[$applicableformatkey];
             if (!$iscoursecompatible) {
-                    $this->content = new stdClass();
-                    $this->content->text = get_string('unusable', 'block_massaction');
-                    $this->content->footer = '';
-                    return $this->content;
+                $this->content = new stdClass();
+                $this->content->text = get_string('unusable', 'block_massaction');
+                $this->content->footer = '';
+                return $this->content;
             }
 
             // Check for double instances. This usually should not be an issue, but in rare cases users manage to add
@@ -149,7 +149,10 @@ class block_massaction extends block_base {
                     $actionicons['moveleft'] = 't/left';
                 }
             }
-            $actionicons['contentchangednotification'] = 't/email';
+            if (has_capability('block/massaction:sendcontentchangednotifications',
+                    context_block::instance($this->instance->id))) {
+                $actionicons['contentchangednotification'] = 't/email';
+            }
 
             $actions = [];
             foreach ($actionicons as $action => $iconpath) {
@@ -163,7 +166,7 @@ class block_massaction extends block_base {
                     'helpicon' => $OUTPUT->help_icon('usage', 'block_massaction'),
                     'show_moveto_select' => has_capability('moodle/course:manageactivities', $context),
                     'show_duplicateto_select' => (has_capability('moodle/backup:backuptargetimport', $context) &&
-                                                  has_capability('moodle/restore:restoretargetimport', $context)),
+                        has_capability('moodle/restore:restoretargetimport', $context)),
                     'sectionselecthelpicon' => $OUTPUT->help_icon('sectionselect', 'block_massaction')
                 ]);
         }
