@@ -58,5 +58,12 @@ if ($hassiteconfig) {
             $supportedformatsbydefault,
             $plugins)
         );
+
+        $settings->add(new admin_setting_configcheckbox(
+            'block_massaction/limittoenrolled',
+            new lang_string('limittoenrolled', 'block_massaction'),
+            new lang_string('limittoenrolled_description', 'block_massaction'),
+            1)
+        );
     }
 }
