@@ -38,9 +38,10 @@ function xmldb_block_massaction_upgrade($oldversion, $block): bool {
         upgrade_block_savepoint(true, 2022000000, 'massaction', false);
     }
 
-    if ($oldversion < 2023041700) { // Add onetopic, grid support.
+    if ($oldversion < 2023041700) { // Add onetopic, grid, and tiles support.
         block_massaction_add_supported_format('onetopic');
         block_massaction_add_supported_format('grid');
+        block_massaction_add_supported_format('tiles');
         upgrade_block_savepoint(true, 2023041700, 'massaction', false);
     }
 
