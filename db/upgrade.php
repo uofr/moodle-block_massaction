@@ -38,6 +38,11 @@ function xmldb_block_massaction_upgrade($oldversion, $block): bool {
         upgrade_block_savepoint(true, 2022000000, 'massaction', false);
     }
 
+    if ($oldversion < 2023041700) { // Add onetopic support.
+        add_supported_format('onetopic');
+        upgrade_block_savepoint(true, 2023041700, 'massaction', false);
+    }
+
     return true;
 }
 
