@@ -38,6 +38,16 @@ use restore_controller_exception;
  */
 class massaction_test extends advanced_testcase {
     /**
+     * @var stdClass Course record.
+     */
+    private $course;
+
+    /**
+     * @var stdClass User record.
+     */
+    private $teacher;
+
+    /**
      * Prepare testing.
      */
     public function setUp(): void {
