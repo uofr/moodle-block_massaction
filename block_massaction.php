@@ -92,6 +92,11 @@ class block_massaction extends block_base {
         $this->content->footer = '';
 
         if ($this->page->user_is_editing()) {
+            $blockcontext = context_block::instance($this->instance->id);
+            if (!has_capability('block/massaction:use', $blockcontext)) {
+                $this->content->text = get_string('nopermissions', 'error', get_string('massaction:use', 'block_massaction'));
+                return $this->content;
+            }
 
             $applicableformatkey = 'course-view-' . $COURSE->format;
             $iscoursecompatible = in_array($applicableformatkey, array_keys($this->applicable_formats()))
