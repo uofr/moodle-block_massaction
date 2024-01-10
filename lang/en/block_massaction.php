@@ -24,9 +24,18 @@
  */
 
 $string['pluginname'] = 'Mass Actions';
+
+$string['massaction:activityshowhide'] = 'MassAction: Show/Hide modules';
 $string['massaction:addinstance'] = 'Add a new Mass Actions Block';
+$string['massaction:delete'] = 'MassAction: Delete modules';
+$string['massaction:descriptionshowhide'] = 'MassAction: Show/Hide Descriptions';
+$string['massaction:duplicate'] = 'MassAction: Duplicate modules';
+$string['massaction:duplicatetocourse'] = 'MassAction: Duplicate to Course';
+$string['massaction:indent'] = 'MassAction: Indent modules';
+$string['massaction:movetosection'] = 'MassAction: Move to Section';
 $string['massaction:use'] = 'Use the Mass Actions block';
 $string['massaction:sendcontentchangednotifications'] = 'Send content changed notifications';
+
 $string['blockname'] = 'Mass Actions';
 $string['blocktitle'] = 'Mass Actions';
 $string['privacy:metadata'] = 'This block only offers the possibility to apply standard operations on multiple course modules at the same time.

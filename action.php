@@ -38,13 +38,13 @@ $deletionconfirmed = optional_param('del_confirm', 0, PARAM_BOOL);
 require_login();
 
 // Check capability.
-$context = context_block::instance($instanceid);
-require_capability('block/massaction:use', $context);
+$blockcontext = context_block::instance($instanceid);
+require_capability('block/massaction:use', $blockcontext);
 
 $data = block_massaction\massactionutils::extract_modules_from_json($massactionrequest);
 $modulerecords = $data->modulerecords;
 
-$context = $context->get_course_context();
+$context = $blockcontext->get_course_context();
 // Dispatch the submitted action.
 
 // Redirect to course by default.
@@ -53,22 +53,27 @@ $redirect = true;
 switch ($data->action) {
     case 'moveleft':
         require_capability('moodle/course:manageactivities', $context);
+        require_capability('block/massaction:indent', $blockcontext);
         block_massaction\actions::adjust_indentation($modulerecords, -1);
         break;
     case 'moveright':
         require_capability('moodle/course:manageactivities', $context);
+        require_capability('block/massaction:indent', $blockcontext);
         block_massaction\actions::adjust_indentation($modulerecords, 1);
         break;
     case 'hide':
         require_capability('moodle/course:activityvisibility', $context);
+        require_capability('block/massaction:activityshowhide', $blockcontext);
         block_massaction\actions::set_visibility($modulerecords, false);
         break;
     case 'show':
         require_capability('moodle/course:activityvisibility', $context);
+        require_capability('block/massaction:activityshowhide', $blockcontext);
         block_massaction\actions::set_visibility($modulerecords, true);
         break;
     case 'makeavailable':
         require_capability('moodle/course:activityvisibility', $context);
+        require_capability('block/massaction:activityshowhide', $blockcontext);
         if (empty($CFG->allowstealth)) {
             throw new invalid_parameter_exception('The "makeavailable" action is deactivated.');
         }
@@ -77,6 +82,7 @@ switch ($data->action) {
     case 'duplicate':
         require_capability('moodle/backup:backuptargetimport', $context);
         require_capability('moodle/restore:restoretargetimport', $context);
+        require_capability('block/massaction:duplicate', $blockcontext);
         if (get_config('block_massaction', 'duplicatemaxactivities') < count($modulerecords)) {
             $duplicatetask = new duplicate_task();
             $duplicatetask->set_userid($USER->id);
@@ -90,6 +96,7 @@ switch ($data->action) {
         break;
     case 'delete':
         require_capability('moodle/course:manageactivities', $context);
+        require_capability('block/massaction:delete', $blockcontext);
         if (!$deletionconfirmed) {
             $redirect = false;
             block_massaction\actions::print_deletion_confirmation($modulerecords, $massactionrequest, $instanceid, $returnurl);
@@ -99,14 +106,17 @@ switch ($data->action) {
         break;
     case 'showdescription':
         require_capability('moodle/course:manageactivities', $context);
+        require_capability('block/massaction:descriptionshowhide', $blockcontext);
         block_massaction\actions::show_description($modulerecords, true);
         break;
     case 'hidedescription':
         require_capability('moodle/course:manageactivities', $context);
+        require_capability('block/massaction:descriptionshowhide', $blockcontext);
         block_massaction\actions::show_description($modulerecords, false);
         break;
     case 'contentchangednotification':
         require_capability('moodle/course:manageactivities', $context);
+        require_capability('block/massaction:sendcontentchangednotifications', $blockcontext);
         block_massaction\actions::send_content_changed_notifications($modulerecords);
         break;
     case 'moveto':
@@ -114,6 +124,7 @@ switch ($data->action) {
             throw new moodle_exception('missingparam', 'block_massaction');
         }
         require_capability('moodle/course:manageactivities', $context);
+        require_capability('block/massaction:movetosection', $blockcontext);
         block_massaction\actions::perform_moveto($modulerecords, $data->moveToTarget);
         break;
     case 'duplicateto':
@@ -122,6 +133,7 @@ switch ($data->action) {
         }
         require_capability('moodle/backup:backuptargetimport', $context);
         require_capability('moodle/restore:restoretargetimport', $context);
+        require_capability('block/massaction:movetosection', $blockcontext);
         if (get_config('block_massaction', 'duplicatemaxactivities') < count($modulerecords)) {
             $duplicatetask = new duplicate_task();
             $duplicatetask->set_userid($USER->id);
@@ -157,6 +169,7 @@ switch ($data->action) {
 
             require_capability('moodle/backup:backuptargetimport', $context);
             require_capability('moodle/restore:restoretargetimport', context_course::instance($targetcourseid));
+            require_capability('block/massaction:duplicatetocourse', $blockcontext);
 
             $sectionselectform = new block_massaction\form\section_select_form(null, $options);
             if ($sectionselectform->is_cancelled()) {
