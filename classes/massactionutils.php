@@ -159,6 +159,9 @@ class massactionutils {
                 }
             }
         }
+        if (empty($newcmid)) {
+            throw new \moodle_exception('Could not duplicate course module from id ' . $cm->id);
+        }
         return $newcmid;
     }
 }
