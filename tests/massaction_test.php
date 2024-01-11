@@ -493,6 +493,65 @@ class massaction_test extends advanced_testcase {
     }
 
     /**
+     * Tests duplicating multiple modules something error in the middle of the process.
+     *
+     * @covers \block_massaction\actions::duplicate
+     * @return void
+     */
+    public function test_mass_duplicate_modules_failing_in_the_middle(): void {
+        global $DB;
+        // Delete 3 module records to fail to duplicate for the module.
+        $modinfo = get_fast_modinfo($this->course->id);
+        $assigncms = $modinfo->get_instances_of('assign');
+        $numberoferror = 3;
+        $counter = 0;
+        foreach ($assigncms as $assigncm) {
+            $DB->execute('DELETE FROM {assign} WHERE id = ' . $assigncm->instance);
+            $counter++;
+            if ($numberoferror == $counter) {
+                break;
+            }
+        }
+        $coursemodules = $this->get_test_course_modules();
+
+        // Prepare redirect Events.
+        $sink = $this->redirectEvents();
+
+        block_massaction\actions::duplicate($coursemodules);
+
+        $newcoursemodules = $this->get_test_course_modules();
+
+        // Check error message.
+        $events = $sink->get_events();
+        $sink->close();
+        $created = 0;
+        $duplicated = 0;
+        $failed = 0;
+        foreach ($events as $event) {
+            $class = get_class($event);
+            switch ($class) {
+                case \core\event\course_module_created::class:
+                    $created++;
+                    break;
+                case \block_massaction\event\course_modules_duplicated::class:
+                    $duplicated++;
+                    break;
+                case \block_massaction\event\course_modules_duplicated_failed::class:
+                    $failed++;
+                    break;
+            }
+        }
+
+        // Modules are duplicated except one deleted module.
+        $this->assertEquals(count($coursemodules) * 2 - $numberoferror, count($newcoursemodules));
+        $this->assertEquals(count($coursemodules) - $numberoferror, $created);
+        // 1 duplicate event (Summary).
+        $this->assertEquals(1, $duplicated);
+        // 3 failed events.
+        $this->assertEquals($numberoferror, $failed);
+    }
+
+    /**
      * Tests the duplicating of multiple modules to a different course.
      *
      * @covers \block_massaction\actions::duplicate_to_course
@@ -506,6 +565,7 @@ class massaction_test extends advanced_testcase {
      * @throws restore_controller_exception
      */
     public function test_mass_duplicate_modules_to_course(): void {
+        global $DB;
         $sourcecourseid = $this->course->id;
         $sourcecoursemodinfo = get_fast_modinfo($sourcecourseid);
         // The teacher in the source course should have the necessary capability to backup modules.
@@ -581,6 +641,31 @@ class massaction_test extends advanced_testcase {
             $this->assertEquals($targetcoursemodinfo->get_cm($targetcoursemodinfo->get_sections()[4][$i])->name,
                 $sourcecoursemodinfo->get_cm($selectedmoduleids[$i])->name);
         }
+
+        // Test if some of the activities are broken, but still complete the job.
+        $targetcourseid = $this->setup_target_course_for_duplicating();
+        $assigncms = $sourcecoursemodinfo->get_instances_of('assign');
+        $numberoferror = 3;
+        $counter = 0;
+        foreach ($assigncms as $assigncm) {
+            $DB->execute('DELETE FROM {assign} WHERE id = ' . $assigncm->instance);
+            $counter++;
+            if ($numberoferror == $counter) {
+                break;
+            }
+        }
+        $coursemodules = $this->get_test_course_modules();
+        // Prepare redirect Events.
+        $sink = $this->redirectEvents();
+        block_massaction\actions::duplicate_to_course($coursemodules, $targetcourseid, $targetsectionnum);
+        $events = $sink->get_events();
+        $sink->close();
+        $targetcoursemodinfo = get_fast_modinfo($targetcourseid);
+        $this->assertCount(count($coursemodules) - $numberoferror, $targetcoursemodinfo->get_cms());
+        $failedevents = array_filter($events, function($event) {
+            return ($event instanceof \block_massaction\event\course_modules_duplicated_failed);
+        });
+        $this->assertCount($numberoferror, $failedevents);
     }
 
     /**
