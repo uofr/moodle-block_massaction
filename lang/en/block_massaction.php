@@ -98,6 +98,7 @@ $string['nocaptorestore'] = 'You do not have sufficient permissions to perform a
 $string['nomovingtargetselected'] = 'Please select a target section';
 $string['notargetcourseidspecified'] = 'No target course id has been specified';
 $string['sectionnotexist'] = 'Target section does not exist';
+$string['sectionrestricted'] = 'Source section is restricted';
 $string['sourcecourseidlost'] = 'Source course id could not be found';
 $string['applicablecourseformats'] = 'Applicable course formats';
 $string['applicablecourseformats_description'] = 'Mass Actions block will only be available for the selected course formats. <br />Preselected defaults are the ones tested and supported by the plugin maintainer. Add other formats at your own risk.';

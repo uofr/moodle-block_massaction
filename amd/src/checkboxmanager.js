@@ -44,8 +44,9 @@ const sectionBoxes = {};
  * The checkbox manager takes a given 'sections' data structure object and inserts a checkbox for each of the given
  * course modules in this data object into the DOM.
  * The checkbox manager returns another data object containing the ids of the added checkboxes.
+ * @param {[]} sectionsRestricted the sections which are restrected for the course format
  */
-export const initCheckboxManager = () => {
+export const initCheckboxManager = sectionsRestricted => {
     const courseEditor = getCurrentCourseEditor();
 
     const eventsToListen = {
@@ -62,21 +63,22 @@ export const initCheckboxManager = () => {
         if (event.detail.action === eventsToListen.CHANGE_FINISHED) {
             // Before every change to the state there is a transaction:start event. After the change is being commited,
             // we receive an transaction:end event. That is the point we want to react to changes of the state.
-            rebuildLocalState();
+            rebuildLocalState(sectionsRestricted);
         }
     });
     // Trigger rendering of sections dropdowns a first time.
     sectionsChanged = true;
     // Get initial state.
-    rebuildLocalState();
+    rebuildLocalState(sectionsRestricted);
 };
 
 /**
  * This method rebuilds the local state maintained in this module based on the course editor state.
  *
  * It will be called whenever a change to the courseeditor state is being detected.
+ * @param {[]} sectionsRestricted the sections which are restrected for the course format
  */
-const rebuildLocalState = () => {
+const rebuildLocalState = sectionsRestricted => {
     if (localStateUpdating) {
         return;
     }
@@ -95,7 +97,7 @@ const rebuildLocalState = () => {
     // Now we use the new information to rebuild dropdowns and re-apply checkboxes.
     const sectionsUnfiltered = sections;
     sections = filterVisibleSections(sections);
-    updateSelectionAndMoveToDropdowns(sections, sectionsUnfiltered);
+    updateSelectionAndMoveToDropdowns(sections, sectionsUnfiltered, sectionsRestricted);
     addCheckboxesToDataStructure();
     localStateUpdating = false;
 };
@@ -196,9 +198,10 @@ const filterVisibleSections = (sections) => {
  *
  * @param {[]} sections the sections object filtered before by {@link filterVisibleSections}
  * @param {[]} sectionsUnfiltered the same data object as 'sections', but still containing all sections
+ * @param {[]} sectionsRestricted the sections which are restrected for the course format
  * no matter if containing modules or are visible in the current course format or not
  */
-const updateSelectionAndMoveToDropdowns = (sections, sectionsUnfiltered) => {
+const updateSelectionAndMoveToDropdowns = (sections, sectionsUnfiltered, sectionsRestricted) => {
     if (sectionsChanged) {
         Templates.renderForPromise('block_massaction/section_select', {'sections': sectionsUnfiltered})
             .then(({html, js}) => {
@@ -214,6 +217,7 @@ const updateSelectionAndMoveToDropdowns = (sections, sectionsUnfiltered) => {
         Templates.renderForPromise('block_massaction/moveto_select', {'sections': sectionsUnfiltered})
             .then(({html, js}) => {
                 Templates.replaceNode('#' + cssIds.MOVETO_SELECT, html, js);
+                disableRestrictedSections(cssIds.MOVETO_SELECT, sectionsRestricted);
                 return true;
             })
             .catch(ex => displayException(ex));
@@ -221,6 +225,7 @@ const updateSelectionAndMoveToDropdowns = (sections, sectionsUnfiltered) => {
         Templates.renderForPromise('block_massaction/duplicateto_select', {'sections': sectionsUnfiltered})
             .then(({html, js}) => {
                 Templates.replaceNode('#' + cssIds.DUPLICATETO_SELECT, html, js);
+                disableRestrictedSections(cssIds.DUPLICATETO_SELECT, sectionsRestricted);
                 return true;
             })
             .catch(ex => displayException(ex));
@@ -251,4 +256,24 @@ const disableInvisibleAndEmptySections = (sections) => {
             option.disabled = false;
         }
     });
+};
+
+/**
+ * Sets the disabled/enabled status of sections in the section select dropdown
+ *  by sectionsRestricted param
+ *
+ * @param {string} elementId elementId to apply the restriction
+ * @param {[]} sectionsRestricted the sections which are restrected for the course format
+ */
+const disableRestrictedSections = (elementId, sectionsRestricted) => {
+    if (document.getElementById(elementId) !== null) {
+        Array.prototype.forEach.call(document.getElementById(elementId).options, option => {
+            // Disable every element which is in the sectionsRestricted list.
+            if (sectionsRestricted.includes(parseInt(option.value))) {
+                option.disabled = true;
+            } else {
+                option.disabled = false;
+            }
+        });
+    }
 };

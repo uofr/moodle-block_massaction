@@ -25,6 +25,7 @@
 
 namespace block_massaction\form;
 
+use block_massaction\massactionutils;
 use core\output\notification;
 use moodleform;
 
@@ -117,10 +118,15 @@ class section_select_form extends moodleform {
             get_string('keepsectionnum', 'block_massaction'), -1, ['class' => 'mt-2']);
         }
 
+        $sectionsrestricted = massactionutils::get_restricted_sections($targetcourseid, $targetformat->get_format());
         // Now add the sections of the target course.
         foreach ($targetsections as $sectionnum => $sectionname) {
+            $attributes = ['class' => 'mt-2'];
+            if (in_array($sectionnum, $sectionsrestricted)) {
+                $attributes['disabled'] = 'disabled';
+            }
             $radioarray[] = $mform->createElement('radio', 'targetsectionnum',
-                '', $sectionname, $sectionnum, ['class' => 'mt-2']);
+                '', $sectionname, $sectionnum, $attributes);
         }
 
         if ($canaddsection) {

@@ -127,7 +127,8 @@ class block_massaction extends block_base {
             }
 
             // Initialize the JS module.
-            $this->page->requires->js_call_amd('block_massaction/massactionblock', 'init');
+            $sectionsrestricted = \block_massaction\massactionutils::get_restricted_sections($COURSE->id, $COURSE->format);
+            $this->page->requires->js_call_amd('block_massaction/massactionblock', 'init', [$sectionsrestricted]);
 
             $context = context_course::instance($COURSE->id);
             // Actions to be rendered later on.

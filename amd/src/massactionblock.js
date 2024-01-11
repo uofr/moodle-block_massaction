@@ -85,8 +85,9 @@ const actions = {
 
 /**
  * Initialize the mass-action block.
+ * @param {[]} sectionsRestricted the sections which are restrected for the course format
  */
-export const init = async() => {
+export const init = async(sectionsRestricted) => {
     const pendingPromise = new Pending('block_massaction/init');
 
     const editor = getCurrentCourseEditor();
@@ -94,7 +95,7 @@ export const init = async() => {
     editor.stateManager.getInitialPromise()
         .then(() => {
             // Initialize the checkbox manager.
-            checkboxmanager.initCheckboxManager();
+            checkboxmanager.initCheckboxManager(sectionsRestricted);
 
             // Show block depending on if the moodle bulk editing util has been activated.
             editor.stateManager.target.addEventListener(events.stateChanged, (event) => {
