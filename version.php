@@ -24,8 +24,8 @@
 
 defined('MOODLE_INTERNAL') || die;
 
-$plugin->version = 2024011600;
+$plugin->version = 2024011601;
 $plugin->requires  = 2023042400;
 $plugin->component = 'block_massaction';
-$plugin->maturity = MATURITY_RC;
-$plugin->release = 'v7.2.1-rc';
+$plugin->maturity = MATURITY_STABLE;
+$plugin->release = 'v7.2.1';
