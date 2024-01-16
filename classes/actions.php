@@ -508,7 +508,7 @@ class actions {
                     \course_modinfo::purge_course_module_cache($cm->course, $cm->id);
                 }
             } else {
-                throw new moodle_exception('Could not find course module with id ' . $cm->id);
+                throw new moodle_exception('invalidmoduleid', 'block_massaction', $cm->id);
             }
         }
     }

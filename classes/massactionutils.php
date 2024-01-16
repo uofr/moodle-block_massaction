@@ -160,7 +160,7 @@ class massactionutils {
             }
         }
         if (empty($newcmid)) {
-            throw new \moodle_exception('Could not duplicate course module from id ' . $cm->id);
+            throw new \moodle_exception('duplicatefailed', 'block_massaction', $cm->id);
         }
         return $newcmid;
     }

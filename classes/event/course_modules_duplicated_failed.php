@@ -52,9 +52,11 @@ class course_modules_duplicated_failed extends base {
      * @return string
      */
     public function get_description(): string {
-        return 'Course modules duplicate failed. '
-            . 'cmid: ' . $this->other['cmid']
-            . 'error:' . $this->other['error'];
+        return get_string('event:duplicated_failed_description',
+                          'block_massaction',
+                          ['cmid' => $this->other['cmid'],
+                           'error' => $this->other['error'],
+                          ]);
     }
 
     /**
