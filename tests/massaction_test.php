@@ -37,7 +37,7 @@ use stdClass;
  * @author     Philipp Memmel
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-class massaction_test extends advanced_testcase {
+final class massaction_test extends advanced_testcase {
     /**
      * @var stdClass Course record.
      */

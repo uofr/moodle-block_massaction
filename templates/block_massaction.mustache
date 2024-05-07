@@ -32,7 +32,8 @@
         "formaction": "doSomething.php",
         "instanceid": "1",
         "requesturl": "doSomething.php",
-        "helpicon": "help.gif"
+        "helpicon": "help.gif",
+        "availabletargetsections": "1,3,5"
     }
 }}
 <div id="block-massaction-bulk-editing-disabled">
@@ -119,4 +120,5 @@
         <input type="hidden" id="block-massaction-return_url" name="return_url" value="{{requesturi}}">
     </form>
     <div id="block-massaction-help-icon">{{{helpicon}}}</div>
+    <input type="hidden" data-block-massaction-data="availabletargetsections" data-availabletargetsections="{{availabletargetsections}}"/>
 </div>
