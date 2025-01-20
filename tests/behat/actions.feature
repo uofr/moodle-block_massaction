@@ -22,6 +22,9 @@ Feature: Check if all the different type of actions of the mass actions block wo
       | label    | TC     | 3        | Test Activity3 | Test Activity3         | 2       |
       | page     | TC     | 4        | Test Activity4 | Test page description4 | 4       |
       | assign   | TC     | 5        | Test Activity5 | Test page description5 | 4       |
+    And the following "blocks" exist:
+      | blockname       | contextlevel | reference | pagetypepattern | defaultregion |
+      | recent_activity | Course       | TC        | course-view-*   | side-pre      |
     When I log in as "teacher1"
     And I am on "Test course" course homepage with editing mode on
     And I add the "Mass Actions" block
@@ -42,24 +45,43 @@ Feature: Check if all the different type of actions of the mass actions block wo
     And "Test Activity4" activity should be visible
     When I click on "Enable bulk editing" "button"
     And I click on "Test Activity1" "checkbox"
-    And I click on "Test Activity4" "checkbox"
     And I click on "Make available" "button" in the "Mass Actions" "block"
     Then I should see "Available but not shown on course page" in the "Test Activity1" "activity"
+    When I hide section "4"
+    And I click on "Enable bulk editing" "button"
+    And I click on "Test Activity4" "checkbox"
+    And I click on "Test Activity5" "checkbox"
+    And I click on "Make available" "button" in the "Mass Actions" "block"
     And I should see "Available but not shown on course page" in the "Test Activity4" "activity"
+    And I should see "Available but not shown on course page" in the "Test Activity5" "activity"
+    When I click on "Enable bulk editing" "button"
+    And I click on "Test Activity5" "checkbox"
+    And I click on "Hide" "button" in the "Mass Actions" "block"
+    And "Test Activity5" activity should be hidden
     And I log out
     When I log in as "student1"
     And I am on "Test course" course homepage
-    Then I should not see "Test Activity1"
-    And I should not see "Test Activity4"
+    Then "Test Activity1" activity should be hidden
+    And I should see "Test Activity1" in the "Recent activity" "block"
+    When I click on "Test Activity1" "link" in the "Recent activity" "block"
+    And I should see "Test Activity1"
+    When I click on "TC" "link"
+    And "Test Activity4" activity should be hidden
+    And I should see "Test Activity4" in the "Recent activity" "block"
+    When I click on "Test Activity4" "link" in the "Recent activity" "block"
+    And I should see "Test Activity4"
+    When I click on "TC" "link"
+    And "Test Activity5" activity should be hidden
+    And I should not see "Test Activity5" in the "Recent activity" "block"
 
   @javascript
   Scenario: Check if mass action 'move to section' works
     When I click on "Test Activity1" "checkbox"
     And I click on "Test Activity4" "checkbox"
-    And I set the field "target_section_moving" in the "Mass Actions" "block" to "Topic 3"
+    And I set the field "target_section_moving" in the "Mass Actions" "block" to "3"
     And I click on "move_to_section" "button" in the "Mass Actions" "block"
-    Then I should see "Test Activity1" in the "Topic 3" "section"
-    And I should see "Test Activity4" in the "Topic 3" "section"
+    Then I should see "Test Activity1" in the "#section-3" "css_element"
+    And I should see "Test Activity4" in the "#section-3" "css_element"
 
   @javascript
   Scenario: Check if mass action 'delete' works
@@ -96,10 +118,9 @@ Feature: Check if all the different type of actions of the mass actions block wo
     And I click on "Test Activity4" "checkbox"
     And I click on "Test Activity5" "checkbox"
     And I click on "Duplicate" "button" in the "Mass Actions" "block"
-    Then I should see "Test Activity2 (copy)" in the "Topic 1" "section"
-    And I should see "Test Activity4 (copy)" in the "Topic 4" "section"
-    And I should see "Test Activity5 (copy)" in the "Topic 4" "section"
-
+    Then I should see "Test Activity2 (copy)" in the "#section-1" "css_element"
+    And I should see "Test Activity4 (copy)" in the "#section-4" "css_element"
+    And I should see "Test Activity5 (copy)" in the "#section-4" "css_element"
   @javascript
   Scenario: Check if mass action 'duplicate to course' works (keeping sections)
     Given the following "courses" exist:
@@ -118,9 +139,9 @@ Feature: Check if all the different type of actions of the mass actions block wo
     And I click on "Keep original section number" "radio"
     And I click on "Choose section" "button"
     And I am on "Test course 2" course homepage
-    Then I should see "Test Activity2" in the "Topic 1" "section"
-    And I should see "Test Activity4" in the "Topic 4" "section"
-    And I should see "Test Activity5" in the "Topic 4" "section"
+    Then I should see "Test Activity2" in the "#section-1" "css_element"
+    And I should see "Test Activity4" in the "#section-4" "css_element"
+    And I should see "Test Activity5" in the "#section-4" "css_element"
 
   @javascript
   Scenario: Check if mass action 'duplicate to course' works (target section)
@@ -140,9 +161,9 @@ Feature: Check if all the different type of actions of the mass actions block wo
     And I click on "Section 2" "radio"
     And I click on "Choose section" "button"
     And I am on "Test course 2" course homepage
-    Then I should see "Test Activity2" in the "Topic 2" "section"
-    And I should see "Test Activity4" in the "Topic 2" "section"
-    And I should see "Test Activity5" in the "Topic 2" "section"
+    Then I should see "Test Activity2" in the "#section-2" "css_element"
+    And I should see "Test Activity4" in the "#section-2" "css_element"
+    And I should see "Test Activity5" in the "#section-2" "css_element"
 
   @javascript
   Scenario: Check if mass action 'duplicate to course' works (new section)
@@ -162,23 +183,23 @@ Feature: Check if all the different type of actions of the mass actions block wo
     And I click on "New Section" "radio"
     And I click on "Choose section" "button"
     And I am on "Test course 2" course homepage
-    Then I should see "Test Activity2" in the "Topic 3" "section"
-    And I should see "Test Activity4" in the "Topic 3" "section"
-    And I should see "Test Activity5" in the "Topic 3" "section"
+    Then I should see "Test Activity2" in the "#section-3" "css_element"
+    And I should see "Test Activity4" in the "#section-3" "css_element"
+    And I should see "Test Activity5" in the "#section-3" "css_element"
 
   @javascript
   Scenario: Check if mass action 'duplicate to section' works
     When I click on "Test Activity2" "checkbox"
     And I click on "Test Activity4" "checkbox"
     And I click on "Test Activity5" "checkbox"
-    And I set the field "target_section_duplicating" in the "Mass Actions" "block" to "Topic 3"
+    And I set the field "target_section_duplicating" in the "Mass Actions" "block" to "3"
     And I click on "duplicate_to_section" "button" in the "Mass Actions" "block"
-    Then I should see "Test Activity2" in the "Topic 1" "section"
-    And I should see "Test Activity4" in the "Topic 4" "section"
-    And I should see "Test Activity5" in the "Topic 4" "section"
-    And I should see "Test Activity2 (copy)" in the "Topic 3" "section"
-    And I should see "Test Activity4 (copy)" in the "Topic 3" "section"
-    And I should see "Test Activity5 (copy)" in the "Topic 3" "section"
+    Then I should see "Test Activity2" in the "#section-1" "css_element"
+    And I should see "Test Activity4" in the "#section-4" "css_element"
+    And I should see "Test Activity5" in the "#section-4" "css_element"
+    And I should see "Test Activity2 (copy)" in the "#section-3" "css_element"
+    And I should see "Test Activity4 (copy)" in the "#section-3" "css_element"
+    And I should see "Test Activity5 (copy)" in the "#section-3" "css_element"
 
   @javascript
   Scenario: Check if mass actions 'indent' and 'outdent' work

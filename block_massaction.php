@@ -22,6 +22,9 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
+use block_massaction\hook\filter_sections_different_course;
+use block_massaction\hook\filter_sections_same_course;
+
 /**
  * Configures and displays the block.
  *
@@ -111,13 +114,13 @@ class block_massaction extends block_base {
 
             // Check for double instances. This usually should not be an issue, but in rare cases users manage to add
             // two blocks to the site.
-            $massactionblockscount = 0;
+            $instancecounter = 0;
             foreach ($this->page->blocks->get_regions() as $region) {
                 foreach ($this->page->blocks->get_blocks_for_region($region) as $block) {
                     if ($block instanceof block_massaction) {
-                        $massactionblockscount++;
+                        $instancecounter++;
                     }
-                    if ($massactionblockscount > 1) {
+                    if ($instancecounter > 1) {
                         $this->content = new stdClass();
                         $this->content->text = get_string('multipleinstances', 'block_massaction');
                         $this->content->footer = '';
@@ -126,9 +129,13 @@ class block_massaction extends block_base {
                 }
             }
 
+            $modinfo = get_fast_modinfo($COURSE->id);
+            $filtersectionshook = new filter_sections_same_course($COURSE->id, array_keys($modinfo->get_section_info_all()));
+            \core\di::get(\core\hook\manager::class)->dispatch($filtersectionshook);
+            $sectionsavailable = $filtersectionshook->get_sectionnums();
+
             // Initialize the JS module.
-            $sectionsrestricted = \block_massaction\massactionutils::get_restricted_sections($COURSE->id, $COURSE->format);
-            $this->page->requires->js_call_amd('block_massaction/massactionblock', 'init', [$sectionsrestricted]);
+            $this->page->requires->js_call_amd('block_massaction/massactionblock', 'init');
 
             $context = context_course::instance($COURSE->id);
             // Actions to be rendered later on.
@@ -187,6 +194,7 @@ class block_massaction extends block_base {
                                                 has_capability('moodle/restore:restoretargetimport', $context) &&
                                                 has_capability('block/massaction:movetosection', $context)),
                   'sectionselecthelpicon' => $OUTPUT->help_icon('sectionselect', 'block_massaction'),
+                    'availabletargetsections' => implode(',', $sectionsavailable),
                 ]);
         }
         return $this->content;

@@ -32,7 +32,6 @@ import events from "core_course/events";
 
 export const usedMoodleCssClasses = {
     ACTIVITY_ITEM: '.activity-item',
-    SECTION_NAME: 'sectionname',
     MODULE_ID_PREFIX: 'module-',
     BOX_ID_PREFIX: 'cmCheckbox'
 };
@@ -60,6 +59,7 @@ export const cssIds = {
     DUPLICATETO_SELECT: 'block-massaction-control-section-list-duplicateto',
     HIDDEN_FIELD_REQUEST_INFORMATION: 'block-massaction-control-request',
     ACTION_FORM: 'block-massaction-control-form',
+    SECTION_FILTER_DATA: `[data-block-massaction-data="availabletargetsections"]`
 };
 
 export const constants = {
@@ -85,9 +85,8 @@ const actions = {
 
 /**
  * Initialize the mass-action block.
- * @param {[]} sectionsRestricted the sections which are restrected for the course format
  */
-export const init = async(sectionsRestricted) => {
+export const init = async() => {
     const pendingPromise = new Pending('block_massaction/init');
 
     const editor = getCurrentCourseEditor();
@@ -95,7 +94,7 @@ export const init = async(sectionsRestricted) => {
     editor.stateManager.getInitialPromise()
         .then(() => {
             // Initialize the checkbox manager.
-            checkboxmanager.initCheckboxManager(sectionsRestricted);
+            checkboxmanager.initCheckboxManager();
 
             // Show block depending on if the moodle bulk editing util has been activated.
             editor.stateManager.target.addEventListener(events.stateChanged, (event) => {
