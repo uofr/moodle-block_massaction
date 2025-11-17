@@ -20,13 +20,16 @@ use advanced_testcase;
 use base_plan_exception;
 use base_setting_exception;
 use block_massaction;
+use block_massaction\hook\filter_sections_different_course;
 use coding_exception;
+use core\di;
 use core\event\course_module_updated;
 use core\task\manager;
 use dml_exception;
 use moodle_exception;
 use require_login_exception;
 use restore_controller_exception;
+use stdClass;
 
 /**
  * block_massaction phpunit test class.
@@ -36,11 +39,22 @@ use restore_controller_exception;
  * @author     Philipp Memmel
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-class massaction_test extends advanced_testcase {
+final class massaction_test extends advanced_testcase {
+    /**
+     * @var stdClass Course record.
+     */
+    private stdClass $course;
+
+    /**
+     * @var stdClass User record.
+     */
+    private stdClass $teacher;
+
     /**
      * Prepare testing.
      */
     public function setUp(): void {
+        parent::setUp();
         $generator = $this->getDataGenerator();
         $this->setAdminUser();
         $this->resetAfterTest();
@@ -53,7 +67,7 @@ class massaction_test extends advanced_testcase {
         // Generate two modules of each type for each of the 5 sections, so we have 6 modules per section.
         $modulerecord = [
             'course' => $this->course->id,
-            'showdescription' => 0
+            'showdescription' => 0,
         ];
         for ($i = 0; $i < 10; $i++) {
             $generator->create_module('assign', $modulerecord, ['section' => floor($i / 2)]);
@@ -372,40 +386,42 @@ class massaction_test extends advanced_testcase {
         $CFG->allowstealth = 1;
         $moduleid = reset($selectedmoduleids);
         $module = get_fast_modinfo($this->course)->get_cm($moduleid);
-        $this->assertEquals(1, $module->visible);
-        $this->assertEquals(1, $module->visibleoncoursepage);
+        $this->assertEquals(1, $module->visible); // Visible in a visible section.
+        $this->assertEquals(1, $module->visibleoncoursepage); // Visible on course page in a visible section.
 
         // Hide section.
         set_section_visible($this->course->id, $module->sectionnum, 0);
         $module = get_fast_modinfo($this->course)->get_cm($moduleid);
         // After section has been hidden the course module should also be hidden.
-        $this->assertEquals(0, $module->visible);
-        $this->assertEquals(1, $module->visibleoncoursepage);
+        $this->assertEquals(0, $module->visible); // Hidden in a hidden section.
+        // Hidden on module in a hidden section: visibleoncoursepage can be 1 or 0.
+        // Makes no difference so we don't need to test it.
 
-        // In case the section is hidden, moodle only knows 2 states only depending on the attribute 'visible':
-        // 'visible' => 1 means that module is 'available, but not visible on course page',
-        // 'visible' => 0 means that module is completely hidden.
-
-        // Try to set it visible.
+        // Set module in a hidden section to be visible (defaults to available).
         actions::set_visibility([$module], true);
         $module = get_fast_modinfo($this->course)->get_cm($moduleid);
         // The section is still hidden, so instead it should be set to 'available, but not visible on course page'.
         $this->assertEquals(1, $module->visible);
-        $this->assertEquals(1, $module->visibleoncoursepage);
+        $this->assertEquals(1, $module->visibleoncoursepage); // Seems strange but this is how it works.
 
+        // Set module in a hidden section to be hidden.
         actions::set_visibility([$module], false);
         $module = get_fast_modinfo($this->course)->get_cm($moduleid);
         // We make sure the module is completely hidden again.
         $this->assertEquals(0, $module->visible);
-        $this->assertEquals(1, $module->visibleoncoursepage);
+        // Hidden on module in a hidden section: visibleoncoursepage can be 1 or 0.
+        // Makes no difference so we don't need to test it.
 
         // Now we use the 'make available' feature for setting it to 'available, but not visible on course page'.
+        // If modules in hidden sections have visible = 1 and visibleoncoursepage = 0, it will show an available tag on
+        // the course page, but when editing the module it will show the Availability as "Hide on the course page".
         actions::set_visibility([$module], true, false);
         $module = get_fast_modinfo($this->course)->get_cm($moduleid);
         $this->assertEquals(1, $module->visible);
-        $this->assertEquals(1, $module->visibleoncoursepage);
+        $this->assertEquals(1, $module->visibleoncoursepage); // Seems strange but this is how it works.
 
         // Just to doublecheck that a visible section behaves differently.
+        // Available modules in visible sections are not visible on course page.
         set_section_visible($this->course->id, $module->sectionnum, 1);
         actions::set_visibility([$module], true, false);
         $module = get_fast_modinfo($this->course)->get_cm($moduleid);
@@ -482,6 +498,65 @@ class massaction_test extends advanced_testcase {
     }
 
     /**
+     * Tests duplicating multiple modules something error in the middle of the process.
+     *
+     * @covers \block_massaction\actions::duplicate
+     * @return void
+     */
+    public function test_mass_duplicate_modules_failing_in_the_middle(): void {
+        global $DB;
+        // Delete 3 module records to fail to duplicate for the module.
+        $modinfo = get_fast_modinfo($this->course->id);
+        $assigncms = $modinfo->get_instances_of('assign');
+        $numberoferror = 3;
+        $counter = 0;
+        foreach ($assigncms as $assigncm) {
+            $DB->execute('DELETE FROM {assign} WHERE id = ' . $assigncm->instance);
+            $counter++;
+            if ($numberoferror == $counter) {
+                break;
+            }
+        }
+        $coursemodules = $this->get_test_course_modules();
+
+        // Prepare redirect Events.
+        $sink = $this->redirectEvents();
+
+        block_massaction\actions::duplicate($coursemodules);
+
+        $newcoursemodules = $this->get_test_course_modules();
+
+        // Check error message.
+        $events = $sink->get_events();
+        $sink->close();
+        $created = 0;
+        $duplicated = 0;
+        $failed = 0;
+        foreach ($events as $event) {
+            $class = get_class($event);
+            switch ($class) {
+                case \core\event\course_module_created::class:
+                    $created++;
+                    break;
+                case \block_massaction\event\course_modules_duplicated::class:
+                    $duplicated++;
+                    break;
+                case \block_massaction\event\course_modules_duplicated_failed::class:
+                    $failed++;
+                    break;
+            }
+        }
+
+        // Modules are duplicated except one deleted module.
+        $this->assertEquals(count($coursemodules) * 2 - $numberoferror, count($newcoursemodules));
+        $this->assertEquals(count($coursemodules) - $numberoferror, $created);
+        // 1 duplicate event (Summary).
+        $this->assertEquals(1, $duplicated);
+        // 3 failed events.
+        $this->assertEquals($numberoferror, $failed);
+    }
+
+    /**
      * Tests the duplicating of multiple modules to a different course.
      *
      * @covers \block_massaction\actions::duplicate_to_course
@@ -495,6 +570,7 @@ class massaction_test extends advanced_testcase {
      * @throws restore_controller_exception
      */
     public function test_mass_duplicate_modules_to_course(): void {
+        global $DB;
         $sourcecourseid = $this->course->id;
         $sourcecoursemodinfo = get_fast_modinfo($sourcecourseid);
         // The teacher in the source course should have the necessary capability to backup modules.
@@ -570,6 +646,31 @@ class massaction_test extends advanced_testcase {
             $this->assertEquals($targetcoursemodinfo->get_cm($targetcoursemodinfo->get_sections()[4][$i])->name,
                 $sourcecoursemodinfo->get_cm($selectedmoduleids[$i])->name);
         }
+
+        // Test if some of the activities are broken, but still complete the job.
+        $targetcourseid = $this->setup_target_course_for_duplicating();
+        $assigncms = $sourcecoursemodinfo->get_instances_of('assign');
+        $numberoferror = 3;
+        $counter = 0;
+        foreach ($assigncms as $assigncm) {
+            $DB->execute('DELETE FROM {assign} WHERE id = ' . $assigncm->instance);
+            $counter++;
+            if ($numberoferror == $counter) {
+                break;
+            }
+        }
+        $coursemodules = $this->get_test_course_modules();
+        // Prepare redirect Events.
+        $sink = $this->redirectEvents();
+        block_massaction\actions::duplicate_to_course($coursemodules, $targetcourseid, $targetsectionnum);
+        $events = $sink->get_events();
+        $sink->close();
+        $targetcoursemodinfo = get_fast_modinfo($targetcourseid);
+        $this->assertCount(count($coursemodules) - $numberoferror, $targetcoursemodinfo->get_cms());
+        $failedevents = array_filter($events, function($event) {
+            return ($event instanceof \block_massaction\event\course_modules_duplicated_failed);
+        });
+        $this->assertCount($numberoferror, $failedevents);
     }
 
     /**
@@ -760,5 +861,108 @@ class massaction_test extends advanced_testcase {
             get_fast_modinfo($this->course->id)->get_section_info(3));
         moveto_module(get_fast_modinfo($this->course->id)->get_cm(get_fast_modinfo($this->course->id)->get_sections()[3][3]),
             get_fast_modinfo($this->course->id)->get_section_info(3));
+    }
+
+    /**
+     * Tests the duplication of modules to a course with filter_sections hook.
+     *
+     * @covers \block_massaction\actions::duplicate_to_course
+     * @return void
+     */
+    public function test_duplicate_to_course_with_filter_sections_different_course_hook(): void {
+        $this->resetAfterTest();
+
+        // Callback for filter_sections_different_course hook.
+        $testcallback = function(filter_sections_different_course $hook) {
+            foreach ($hook->get_sectionnums() as $sectionnum) {
+                // Restrict section 3 onward.
+                if ($sectionnum >= 3) {
+                    $hook->remove_sectionnum($sectionnum);
+                }
+            }
+
+            // Disable the options to keep the original section.
+            $hook->disable_originsectionkept();
+
+            // Disable the option to create a new section.
+            $hook->disable_makesection();
+        };
+        $this->redirectHook(filter_sections_different_course::class, $testcallback);
+
+        // Source course.
+        $sourcecourseid = $this->course->id;
+        $sourcecoursemodinfo = get_fast_modinfo($sourcecourseid);
+
+        // Move modules around so that they are not in id order.
+        $this->shuffle_modules();
+
+        // Select some random course modules from different sections to be duplicated.
+        $selectedmoduleids[] = $sourcecoursemodinfo->get_sections()[1][0];
+        $selectedmoduleids[] = $sourcecoursemodinfo->get_sections()[1][1];
+        $selectedmoduleids[] = $sourcecoursemodinfo->get_sections()[3][0];
+        $selectedmoduleids[] = $sourcecoursemodinfo->get_sections()[3][2];
+
+        $selectedmodules = array_filter($this->get_test_course_modules(), function($module) use ($selectedmoduleids) {
+            return in_array($module->id, $selectedmoduleids);
+        });
+
+        // Target course.
+        $targetcourseid = $this->setup_target_course_for_duplicating(3);
+        $targetcoursemodinfo = get_fast_modinfo($targetcourseid);
+        // Four sections (0 1 2 3).
+        $this->assertCount(4, $targetcoursemodinfo->get_section_info_all());
+        // There is no module.
+        $this->assertEmpty($targetcoursemodinfo->get_cms());
+
+        // Test keep origin section.
+        actions::duplicate_to_course($selectedmodules, $targetcourseid, -1);
+        $targetcoursemodinfo = get_fast_modinfo($targetcourseid);
+        // Four sections (0 1 2 3).
+        $this->assertCount(4, $targetcoursemodinfo->get_section_info_all());
+        // There is no module as we cannot keep origin section.
+        $this->assertEmpty($targetcoursemodinfo->get_cms());
+
+        // Test create new section.
+        actions::duplicate_to_course($selectedmodules, $targetcourseid, 4);
+        $targetcoursemodinfo = get_fast_modinfo($targetcourseid);
+        // Still four sections (0 1 2 3).
+        $this->assertCount(4, $targetcoursemodinfo->get_section_info_all());
+        // And still no module.
+        $this->assertEmpty($targetcoursemodinfo->get_cms());
+
+        // Duplicate to section 3, which is restricted by the hook.
+        actions::duplicate_to_course($selectedmodules, $targetcourseid, 3);
+        $targetcoursemodinfo = get_fast_modinfo($targetcourseid);
+        // Still four sections (0 1 2 3).
+        $this->assertCount(4, $targetcoursemodinfo->get_section_info_all());
+        // And still no module.
+        $this->assertEmpty($targetcoursemodinfo->get_cms());
+
+        // Duplicate to section 1, this should work as normal.
+        actions::duplicate_to_course($selectedmodules, $targetcourseid, 1);
+        $targetcoursemodinfo = get_fast_modinfo($targetcourseid);
+        $this->assertCount(4, $targetcoursemodinfo->get_section_info_all());
+        // There should be 4 modules now.
+        $this->assertCount(4, $targetcoursemodinfo->get_cms());
+        // These module ids should be in section 1.
+        $duplicatedmoduleids = $targetcoursemodinfo->get_sections()[1];
+        $this->assertCount(4, $duplicatedmoduleids);
+
+        // Sort name of the modules to be able to compare them.
+        $sourcemodulenames = [];
+        foreach ($selectedmoduleids as $selectedmoduleid) {
+            $sourcemodulenames[] = $sourcecoursemodinfo->get_cm($selectedmoduleid)->name;
+        }
+        sort($sourcemodulenames);
+
+        // Sort name of the duplicated modules to be able to compare them.
+        $duplicatedmodulenames = [];
+        foreach ($duplicatedmoduleids as $moduleid) {
+            $duplicatedmodulenames[] = $targetcoursemodinfo->get_cm($moduleid)->name;
+        }
+        sort($duplicatedmodulenames);
+
+        // The names of the duplicated modules should be the same as the source module names.
+        $this->assertEquals($sourcemodulenames, $duplicatedmodulenames);
     }
 }

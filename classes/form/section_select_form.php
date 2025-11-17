@@ -25,6 +25,8 @@
 
 namespace block_massaction\form;
 
+use block_massaction\hook\filter_sections_different_course;
+use block_massaction\massactionutils;
 use core\output\notification;
 use moodleform;
 
@@ -98,8 +100,13 @@ class section_select_form extends moodleform {
         // Trims off any possible orphaned sections.
         $targetsections = array_slice($targetsections, 0, $targetsectionnum + 1);
 
+        $filtersectionshook = new filter_sections_different_course($targetcourseid, array_keys($targetsections));
+        \core\di::get(\core\hook\manager::class)->dispatch($filtersectionshook);
+        $filteredsections = $filtersectionshook->get_sectionnums();
+
         // Check for permissions.
-        $canaddsection = has_capability('moodle/course:update', \context_course::instance($targetcourseid));
+        $canaddsection = has_capability('moodle/course:update', \context_course::instance($targetcourseid))
+            && $filtersectionshook->is_makesectionallowed();
 
         // Find maximum section that may need to be created.
         $massactionrequest = $this->_customdata['request'];
@@ -111,7 +118,7 @@ class section_select_form extends moodleform {
 
         $radioarray = [];
         // If user can add sections in target course or don't need to be able to.
-        if ($canaddsection || $srcmaxsectionnum <= $targetsectionnum) {
+        if (($canaddsection || $srcmaxsectionnum <= $targetsectionnum) && $filtersectionshook->is_originsectionkept()) {
             // We add the default value: Restore each course module to the section number it has in the source course.
             $radioarray[] = $mform->createElement('radio', 'targetsectionnum', '',
             get_string('keepsectionnum', 'block_massaction'), -1, ['class' => 'mt-2']);
@@ -119,8 +126,12 @@ class section_select_form extends moodleform {
 
         // Now add the sections of the target course.
         foreach ($targetsections as $sectionnum => $sectionname) {
+            $attributes = ['class' => 'mt-2'];
+            if (!in_array($sectionnum, $filteredsections)) {
+                $attributes['disabled'] = 'disabled';
+            }
             $radioarray[] = $mform->createElement('radio', 'targetsectionnum',
-                '', $sectionname, $sectionnum, ['class' => 'mt-2']);
+                '', $sectionname, $sectionnum, $attributes);
         }
 
         if ($canaddsection) {

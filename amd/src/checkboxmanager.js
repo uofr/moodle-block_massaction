@@ -81,23 +81,55 @@ const rebuildLocalState = () => {
         return;
     }
     localStateUpdating = true;
-    const courseEditor = getCurrentCourseEditor();
 
     // First we rebuild our data structures depending on the course editor state.
-    sections = [];
     for (const prop of Object.getOwnPropertyNames(sectionBoxes)) {
         delete sectionBoxes[prop];
     }
-    // The section map object is being sorted by section id. We have to sort after order in this course.
-    sections = [...courseEditor.stateManager.state.section.values()].sort((a, b) => a.number > b.number ? 1 : -1);
+
+    const courseEditor = getCurrentCourseEditor();
+    const state = courseEditor.stateManager.state;
+    const exporter = courseEditor.getExporter();
+
+    // Get all modules, sections and subsections in display order.
+    const courseItems = exporter.allItemsArray(state);
+
+    // Build sections array.
+    sections = [];
+    courseItems.forEach(item => {
+        if (item.type === 'section') {
+            // Get section info.
+            let sectioninfo = {...state.section.get(item.id)};
+            // Rename subsections for display purposes.
+            sectioninfo.title = getTitleOfSection(sectioninfo);
+            sections.push(sectioninfo);
+        }
+    });
+
+    // Get all module names and parameters.
     moduleNames = [...courseEditor.stateManager.state.cm.values()];
 
     // Now we use the new information to rebuild dropdowns and re-apply checkboxes.
     const sectionsUnfiltered = sections;
     sections = filterVisibleSections(sections);
     updateSelectionAndMoveToDropdowns(sections, sectionsUnfiltered);
-    addCheckboxes();
+    addCheckboxesToDataStructure();
     localStateUpdating = false;
+};
+
+/**
+ * Returns the title of a given section.
+ * If the section is a subsection, a prefix with a dash is added.
+ *
+ * @param {Object} section the section object from the course editor
+ * @returns {string} title of the section object corrected for subsections
+ */
+export const getTitleOfSection = (section) => {
+    let title = section.title;
+    if (section.component === 'mod_subsection') {
+        title = ' - ' + title;
+    }
+    return title;
 };
 
 /**
@@ -115,6 +147,7 @@ export const getSelectedModIds = () => {
             }
         }
     }
+
     return moduleIds;
 };
 
@@ -127,7 +160,6 @@ export const getSelectedModIds = () => {
  */
 export const setSectionSelection = (value, sectionNumber) => {
     const boxIds = [];
-
     if (typeof sectionNumber !== 'undefined' && sectionNumber === constants.SECTION_SELECT_DESCRIPTION_VALUE) {
         // Description placeholder has been selected, do nothing.
         return;
@@ -142,6 +174,7 @@ export const setSectionSelection = (value, sectionNumber) => {
         // We select all boxes of the given section.
         sectionBoxes[sectionNumber].forEach(box => boxIds.push(box.boxId));
     }
+
     // Un/check the boxes.
     for (let i = 0; i < boxIds.length; i++) {
         document.getElementById(boxIds[i]).checked = value;
@@ -152,70 +185,32 @@ export const setSectionSelection = (value, sectionNumber) => {
 };
 
 /**
- * Add checkboxes to all sections.
+ * Scan all available checkboxes and add them to the data structure.
  */
-const addCheckboxes = () => {
+const addCheckboxesToDataStructure = () => {
     sections.forEach(section => {
         sectionBoxes[section.number] = [];
         const moduleIds = section.cmlist;
+
         if (moduleIds && moduleIds.length > 0 && moduleIds[0] !== '') {
             const moduleNamesFiltered = moduleNames.filter(modinfo => moduleIds.includes(modinfo.id.toString()));
             moduleNamesFiltered.forEach(modinfo => {
-                addCheckboxToModule(section.number, modinfo.id.toString(), modinfo.name);
+                if (modinfo.module !== 'subsection') {
+                    // Checkbox should already be created by moodle massactions. Just add it to our data structure.
+                    const boxId = usedMoodleCssClasses.BOX_ID_PREFIX + modinfo.id.toString();
+                    sectionBoxes[section.number].push({
+                        'moduleId': modinfo.id.toString(),
+                        'boxId': boxId,
+                    });
+                }
             });
         }
     });
 };
 
 /**
- * Add a checkbox to a module element
- *
- * @param {number} sectionNumber number of the section of the current course module
- * @param {number} moduleId id of the current course module
- * @param {string} moduleName name of the course module specified by moduleId
- */
-const addCheckboxToModule = (sectionNumber, moduleId, moduleName) => {
-    const boxId = cssIds.BOX_ID_PREFIX + moduleId;
-    let moduleElement = document.getElementById(usedMoodleCssClasses.MODULE_ID_PREFIX + moduleId)
-        .querySelector(usedMoodleCssClasses.ACTIVITY_ITEM);
-    // This additional class is only needed when we are using a legacy (pre moodle 4.0) course format.
-    let additionalCssClass;
-    if (!moduleElement) {
-        // Should only happen in legacy formats (pre moodle 4.0).
-        moduleElement = document.getElementById(usedMoodleCssClasses.MODULE_ID_PREFIX + moduleId);
-        additionalCssClass = 'block-massaction-checkbox-legacy';
-    }
-
-    // Avoid creating duplicate checkboxes.
-    if (document.getElementById(boxId) === null) {
-        // Add the checkbox.
-        const checkBoxElement = document.createElement('input');
-        checkBoxElement.type = 'checkbox';
-        checkBoxElement.className = cssIds.CHECKBOX_CLASS;
-        if (additionalCssClass) {
-            checkBoxElement.classList.add(additionalCssClass);
-        }
-        checkBoxElement.id = boxId;
-
-        if (moduleElement !== null) {
-            const checkboxDescription = moduleName + constants.CHECKBOX_DESCRIPTION_SUFFIX;
-            checkBoxElement.ariaLabel = checkboxDescription;
-            checkBoxElement.name = checkboxDescription;
-            // Finally add the created checkbox element.
-            moduleElement.insertBefore(checkBoxElement, moduleElement.firstChild);
-        }
-    }
-
-    // Add the newly created checkbox to our data structure.
-    sectionBoxes[sectionNumber].push({
-        'moduleId': moduleId,
-        'boxId': boxId,
-    });
-};
-
-/**
  * Filter the sections data object depending on the visibility of the course modules contained in
- * the data object. This is neccessary, because some course formats only show specific section(s)
+ * the data object. This is necessary, because some course formats only show specific section(s)
  * in editing mode.
  *
  * @param {[]} sections the sections data object
@@ -237,7 +232,6 @@ const filterVisibleSections = (sections) => {
  *
  * @param {[]} sections the sections object filtered before by {@link filterVisibleSections}
  * @param {[]} sectionsUnfiltered the same data object as 'sections', but still containing all sections
- * no matter if containing modules or are visible in the current course format or not
  */
 const updateSelectionAndMoveToDropdowns = (sections, sectionsUnfiltered) => {
     if (sectionsChanged) {
@@ -255,6 +249,7 @@ const updateSelectionAndMoveToDropdowns = (sections, sectionsUnfiltered) => {
         Templates.renderForPromise('block_massaction/moveto_select', {'sections': sectionsUnfiltered})
             .then(({html, js}) => {
                 Templates.replaceNode('#' + cssIds.MOVETO_SELECT, html, js);
+                disableUnavailableSections(cssIds.MOVETO_SELECT);
                 return true;
             })
             .catch(ex => displayException(ex));
@@ -262,12 +257,13 @@ const updateSelectionAndMoveToDropdowns = (sections, sectionsUnfiltered) => {
         Templates.renderForPromise('block_massaction/duplicateto_select', {'sections': sectionsUnfiltered})
             .then(({html, js}) => {
                 Templates.replaceNode('#' + cssIds.DUPLICATETO_SELECT, html, js);
+                disableUnavailableSections(cssIds.DUPLICATETO_SELECT);
                 return true;
             })
             .catch(ex => displayException(ex));
     } else {
         // If there has not been an event about a section change we do not have to rebuild the sections dropdowns.
-        // However there is a chance an section is being emptied or not empty anymore due to drag&dropping of modules.
+        // However, there is a chance a section is being emptied or not empty anymore due to drag&dropping of modules.
         // So we have to recalculate if we have to enable/disable the sections.
         disableInvisibleAndEmptySections(sections);
     }
@@ -292,4 +288,25 @@ const disableInvisibleAndEmptySections = (sections) => {
             option.disabled = false;
         }
     });
+};
+
+/**
+ * Sets the disabled/enabled status of sections in the section select dropdown:
+ * Disabled if the section is not available due to some restrictions in block_massaction itself (provided by hooks).
+ *
+ * @param {string} elementId elementId to apply the restriction
+ */
+const disableUnavailableSections = (elementId) => {
+    if (document.getElementById(elementId) !== null) {
+        const sectionsAvailableInfo = document.querySelector(cssIds.SECTION_FILTER_DATA).dataset.availabletargetsections;
+        const sectionsAvailable = Array.prototype.map.call(sectionsAvailableInfo.split(','), (sectionnum) => parseInt(sectionnum));
+        Array.prototype.forEach.call(document.getElementById(elementId).options, option => {
+            // Disable every element which is not in the sectionsAvailable list.
+            if (sectionsAvailable.includes(parseInt(option.value))) {
+                option.disabled = false;
+            } else {
+                option.disabled = true;
+            }
+        });
+    }
 };

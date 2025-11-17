@@ -29,6 +29,8 @@ use base_plan_exception;
 use base_setting_exception;
 use block_massaction\form\course_select_form;
 use block_massaction\form\section_select_form;
+use block_massaction\hook\filter_sections_different_course;
+use block_massaction\hook\filter_sections_same_course;
 use coding_exception;
 use context_course;
 use core\event\course_module_updated;
@@ -93,23 +95,34 @@ class actions {
         }
 
         foreach ($modules as $cm) {
+            // Convert boolean to integer.
+            $visibleint = $visible ? 1 : 0;
+            $visibleonpageint = $visibleonpage ? 1 : 0;
+
+            // Stealth activities, if enabled, are stored differently in visible and hidden sections.
+            // So we still need to do a little bit of extra work here.
             if ($visible && !$visibleonpage) {
-                // We want to set the visibility to 'available, but hidden', but have to respect the global config and
-                // the course format config.
+                // We want to have an available but hidden activity.
+                // First we need to make sure stealth activities are enabled.
                 if (empty($CFG->allowstealth)) {
                     // We silently ignore this course module it must not be set to 'available, but not visible on course page'.
                     continue;
                 }
+
+                // In a hidden section, show and make available are the same thing.
+                // In a visible section, show has a visibleonpage of 1 and stealth has a visibleonpage of 0.
+                // Gather more information about the module and where it is located.
+                $modinfo = get_fast_modinfo($cm->course);
+                $format = course_get_format($modinfo->get_course());
+                $cm = $modinfo->get_cm($cm->id);
+
+                // Modules in hidden sections cannot by definition be visible on the course page.
+                $allowstealth = $format->allow_stealth_module_visibility($cm, $cm->get_section_info());
+                // Only modules in visible sections need a visibleonpage of 0.
+                $visibleonpageint = $allowstealth ? 0 : 1;
             }
 
-            // We here also cover the case of a hidden section. In this case moodle only uses the attribute 'visible' to determine,
-            // if a course module is completely hidden ('visible' => 0) or 'available, but not visible on course page'
-            // ('visible' => 1). The attribute 'visibleonpage' is being ignored, so we can pass it along anyway.
-            // Because of this in case of a hidden section both actions ('show' and 'make available') lead to the same result:
-            // 'available, but not visible on course page'.
-
-            $visibleint = $visible ? 1 : 0;
-            $visibleonpageint = $visibleonpage ? 1 : 0;
+            // Set visibility.
             if (set_coursemodule_visible($cm->id, $visibleint, $visibleonpageint)) {
                 course_module_updated::create_from_cm(get_coursemodule_from_id(false, $cm->id))->trigger();
             }
@@ -135,6 +148,11 @@ class actions {
         }
 
         $courseid = reset($modules)->course;
+        if (!$DB->record_exists('course', ['id' => $courseid])) {
+            debugging('Could not find the course (id ' . $courseid
+                    . '), has probably been deleted before we can duplicate, exiting cleanly.');
+            return;
+        }
 
         // Needed to set the correct context.
         require_login($courseid);
@@ -147,8 +165,34 @@ class actions {
         // sorted by their id:
         // Let order of mods in a section be mod1, mod2, mod3, mod4, mod5. If we duplicate mod2, mod4, the order afterwards will be
         // mod1, mod2, mod3, mod4, mod5, mod2(dup), mod4(dup).
+
+        $cms = [];
+        $errors = [];
+        $duplicatedmods = [];
+        $filtersectionshook = new filter_sections_same_course($courseid, array_keys($modinfo->get_section_info_all()));
+        \core\di::get(\core\hook\manager::class)->dispatch($filtersectionshook);
         foreach ($idsincourseorder as $cmid) {
-            $duplicatedmod = duplicate_module($modinfo->get_course(), $modinfo->get_cm($cmid));
+            $cm = $modinfo->get_cm($cmid);
+            // Not duplicated if the section is restricted.
+            if (!in_array($cm->sectionnum, $filtersectionshook->get_sectionnums())) {
+                throw new moodle_exception('sectionrestricted', 'block_massaction', '', $cm->sectionnum);
+            }
+
+            try {
+                $duplicatedmod = duplicate_module($modinfo->get_course(), $modinfo->get_cm($cmid));
+            } catch (\Exception $e) {
+                $errors[$cmid] = 'cmid:' . $cmid . '(' . $e->getMessage() . ')';
+                $event = \block_massaction\event\course_modules_duplicated_failed::create([
+                    'context' => \context_course::instance($courseid),
+                    'other' => [
+                        'cmid' => $cmid,
+                        'error' => $errors[$cmid],
+                    ],
+                ]);
+                $event->trigger();
+                continue;
+            }
+            $cms[$cmid] = $duplicatedmod->id;
             $duplicatedmods[] = $duplicatedmod;
         }
 
@@ -159,7 +203,7 @@ class actions {
                 $section = $modinfo->get_section_info($duplicatedmod->sectionnum);
             } else { // Duplicate to a specific section.
                 // Verify target.
-                if (!$section = $DB->get_record('course_sections', array('course' => $courseid, 'section' => $sectionnumber))) {
+                if (!$section = $DB->get_record('course_sections', ['course' => $courseid, 'section' => $sectionnumber])) {
                     throw new moodle_exception('sectionnotexist', 'block_massaction');
                 }
             }
@@ -167,6 +211,14 @@ class actions {
             // Move each module to the end of their section.
             moveto_module($duplicatedmod, $section);
         }
+        $event = \block_massaction\event\course_modules_duplicated::create([
+            'context' => \context_course::instance($courseid),
+            'other' => [
+                'cms' => $cms,
+                'failed' => array_keys($errors),
+            ],
+        ]);
+        $event->trigger();
     }
 
     /**
@@ -185,7 +237,7 @@ class actions {
      * @throws moodle_exception
      */
     public static function duplicate_to_course(array $modules, int $targetcourseid, int $sectionnum = -1): void {
-        global $CFG;
+        global $CFG, $DB;
         require_once($CFG->dirroot . '/course/lib.php');
         require_once($CFG->dirroot . '/lib/modinfolib.php');
         if (empty($modules) || !reset($modules)
@@ -193,6 +245,16 @@ class actions {
             return;
         }
         $sourcecourseid = reset($modules)->course;
+        if (!$DB->record_exists('course', ['id' => $sourcecourseid])) {
+            debugging('Could not find the source course (id ' . $sourcecourseid
+                    . '), has probably been deleted before we can duplicate to this course, exiting cleanly.');
+            return;
+        }
+        if (!$DB->record_exists('course', ['id' => $targetcourseid])) {
+            debugging('Could not find the target course (id ' . $targetcourseid
+                    . '), has probably been deleted before we can duplicate to this course, exiting cleanly.');
+            return;
+        }
         $sourcecoursecontext = context_course::instance($sourcecourseid);
         $targetcoursecontext = context_course::instance($targetcourseid);
 
@@ -208,12 +270,31 @@ class actions {
         $sourcemodinfo = get_fast_modinfo($sourcecourseid);
         $targetmodinfo = get_fast_modinfo($targetcourseid);
         $targetformat = course_get_format($targetmodinfo->get_course());
-        $targetsectionnum = $targetformat->get_last_section_number();
+        $lastsectionnum = $targetformat->get_last_section_number();
 
-        $canaddsection = has_capability('moodle/course:update', context_course::instance($targetcourseid));
+        $filtersectionshook = new filter_sections_different_course($targetcourseid,
+                array_keys($targetmodinfo->get_section_info_all()));
+        \core\di::get(\core\hook\manager::class)->dispatch($filtersectionshook);
+        $filteredsections = $filtersectionshook->get_sectionnums();
 
-        // If a new section has been specified, we create one.
-        if ($sectionnum > $targetsectionnum) {
+        if ($sectionnum == -1 && !$filtersectionshook->is_originsectionkept()) {
+            // The course modules should be in the same section number as in the original course. However, the hook listener(s)
+            // disabled this option, so we cancel the operation.
+            // This is only a security measure and should not happen unless someone manipulates the UI.
+            return;
+        }
+
+        if (($sectionnum >= 0) && ($sectionnum <= $lastsectionnum) && !in_array($sectionnum, $filteredsections)) {
+            // The target section number has been filtered by a hook callback, thus must not be used.
+            // This is only a security measure and should not happen unless someone manipulates the UI.
+            return;
+        }
+
+        $canaddsection = has_capability('moodle/course:update', context_course::instance($targetcourseid))
+            && $filtersectionshook->is_makesectionallowed();
+
+        // If a new section (that means that $sectionnum of the user is higher than $lastsectionnum), we create one.
+        if ($sectionnum > $lastsectionnum) {
             // No permissions to add section.
             if (!$canaddsection) {
                 return;
@@ -221,17 +302,17 @@ class actions {
 
             $targetformatopt = $targetformat->get_format_options();
             // No course format setting or no orphaned sections exist.
-            if (!isset($targetformatopt['numsections']) || !($targetformatopt['numsections'] < $targetsectionnum)) {
+            if (!isset($targetformatopt['numsections']) || !($targetformatopt['numsections'] < $lastsectionnum)) {
                 course_create_section($targetcourseid);
             }
 
             // Update course format setting to prevent new orphaned sections.
             if (isset($targetformatopt['numsections'])) {
-                update_course((object)array('id' => $targetcourseid, 'numsections' => $targetformatopt['numsections'] + 1));
+                update_course((object)['id' => $targetcourseid, 'numsections' => $targetformatopt['numsections'] + 1]);
             }
 
             // Make sure new sectionnum is set accurately.
-            $sectionnum = $targetsectionnum + 1;
+            $sectionnum = $lastsectionnum + 1;
         }
 
         if ($sectionnum == -1) {
@@ -242,7 +323,7 @@ class actions {
             }, $modules));
 
             // If target course needs sections added but user does not have permission.
-            if ($srcmaxsectionnum > $targetsectionnum && !$canaddsection) {
+            if ($srcmaxsectionnum > $lastsectionnum && !$canaddsection) {
                 return; // No permission to add section.
             }
 
@@ -252,7 +333,7 @@ class actions {
             // Update course format setting to prevent orphaned sections.
             $targetformatopt = $targetformat->get_format_options();
             if (isset($targetformatopt['numsections']) && $targetformatopt['numsections'] < $srcmaxsectionnum) {
-                update_course((object)array('id' => $targetcourseid, 'numsections' => $srcmaxsectionnum));
+                update_course((object)['id' => $targetcourseid, 'numsections' => $srcmaxsectionnum]);
             }
         }
 
@@ -262,8 +343,35 @@ class actions {
         // Let order of mods in a section be mod1, mod2, mod3, mod4, mod5. If we duplicate mod2, mod4, the order afterwards will be
         // mod1, mod2, mod3, mod4, mod5, mod2(dup), mod4(dup).
         $duplicatedmods = [];
+        $cms = [];
+        $errors = [];
+        $filtersectionshook = new filter_sections_same_course($sourcecourseid, array_keys($sourcemodinfo->get_section_info_all()));
+        \core\di::get(\core\hook\manager::class)->dispatch($filtersectionshook);
+        $srcfilteredsections = $filtersectionshook->get_sectionnums();
+
         foreach ($idsincourseorder as $cmid) {
-            $duplicatedmod = massactionutils::duplicate_cm_to_course($targetmodinfo->get_course(), $sourcemodinfo->get_cm($cmid));
+            $sourcecm = $sourcemodinfo->get_cm($cmid);
+            // Not duplicated if the section is restricted.
+            if (!in_array($sourcecm->sectionnum, $srcfilteredsections)) {
+                throw new moodle_exception('sectionrestricted', 'block_massaction', '', $sourcecm->sectionnum);
+            }
+
+            try {
+                $duplicatedmod = massactionutils::duplicate_cm_to_course($targetmodinfo->get_course(),
+                    $sourcemodinfo->get_cm($cmid));
+            } catch (\Exception $e) {
+                $errors[$cmid] = 'cmid:' . $cmid . '(' . $e->getMessage() . ')';
+                $event = \block_massaction\event\course_modules_duplicated_failed::create([
+                    'context' => \context_course::instance($sourcecourseid),
+                    'other' => [
+                        'cmid' => $cmid,
+                        'error' => $errors[$cmid],
+                    ],
+                ]);
+                $event->trigger();
+                continue;
+            }
+            $cms[$cmid] = $duplicatedmod;
             $duplicatedmods[] = $duplicatedmod;
         }
 
@@ -276,6 +384,14 @@ class actions {
                 moveto_module($targetmodinfo->get_cm($modid), $targetsection);
             }
         }
+        $event = \block_massaction\event\course_modules_duplicated::create([
+            'context' => \context_course::instance($sourcecourseid),
+            'other' => [
+                'cms' => $cms,
+                'failed' => array_keys($errors),
+            ],
+        ]);
+        $event->trigger();
     }
 
     /**
@@ -348,7 +464,7 @@ class actions {
             'instance_id' => $instanceid,
             'return_url' => $returnurl,
             'request' => $massactionrequest,
-            'del_confirm' => 1
+            'del_confirm' => 1,
         ];
         $optionsoncancel = ['id' => $cm->course];
 
@@ -394,7 +510,7 @@ class actions {
                 new moodle_exception('invalidcoursemodule');
             }
 
-            if (!$DB->get_record('course', array('id' => $cm->course))) {
+            if (!$DB->get_record('course', ['id' => $cm->course])) {
                 throw new moodle_exception('invalidcourseid');
             }
 
@@ -441,7 +557,7 @@ class actions {
                     \course_modinfo::purge_course_module_cache($cm->course, $cm->id);
                 }
             } else {
-                throw new moodle_exception('Could not find course module with id ' . $cm->id);
+                throw new moodle_exception('invalidmoduleid', 'block_massaction', $cm->id);
             }
         }
     }
@@ -497,14 +613,28 @@ class actions {
 
         $idsincourseorder = self::sort_course_order($modules);
 
+        if (!empty($modules)) {
+            $courseid = reset($modules)->course;
+            $filtersectionshook = new filter_sections_same_course(
+                    $courseid,
+                    array_keys(get_fast_modinfo($courseid)->get_section_info_all())
+            );
+            \core\di::get(\core\hook\manager::class)->dispatch($filtersectionshook);
+        }
+
         foreach ($idsincourseorder as $cmid) {
             if (!$cm = get_coursemodule_from_id('', $cmid, 0, true)) {
                 throw new moodle_exception('invalidcoursemodule');
             }
 
             // Verify target.
-            if (!$section = $DB->get_record('course_sections', array('course' => $cm->course, 'section' => $target))) {
+            if (!$section = $DB->get_record('course_sections', ['course' => $cm->course, 'section' => $target])) {
                 throw new moodle_exception('sectionnotexist', 'block_massaction');
+            }
+
+            // Not moving if the section is restricted.
+            if (!in_array($cm->sectionnum, $filtersectionshook->get_sectionnums())) {
+                throw new moodle_exception('sectionrestricted', 'block_massaction', '', $cm->sectionnum);
             }
 
             // Move each module to the end of their section.

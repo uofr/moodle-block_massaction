@@ -22,6 +22,9 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
+use block_massaction\hook\filter_sections_different_course;
+use block_massaction\hook\filter_sections_same_course;
+
 /**
  * Configures and displays the block.
  *
@@ -92,6 +95,12 @@ class block_massaction extends block_base {
         $this->content->footer = '';
 
         if ($this->page->user_is_editing()) {
+            $blockcontext = context_block::instance($this->instance->id);
+
+            if (!has_capability('block/massaction:use', $blockcontext)) {
+                $this->content->text = get_string('nopermissions', 'error', get_string('massaction:use', 'block_massaction'));
+                return $this->content;
+            }
 
             $applicableformatkey = 'course-view-' . $COURSE->format;
             $iscoursecompatible = in_array($applicableformatkey, array_keys($this->applicable_formats()))
@@ -105,13 +114,13 @@ class block_massaction extends block_base {
 
             // Check for double instances. This usually should not be an issue, but in rare cases users manage to add
             // two blocks to the site.
-            $massactionblockscount = 0;
+            $instancecounter = 0;
             foreach ($this->page->blocks->get_regions() as $region) {
                 foreach ($this->page->blocks->get_blocks_for_region($region) as $block) {
                     if ($block instanceof block_massaction) {
-                        $massactionblockscount++;
+                        $instancecounter++;
                     }
-                    if ($massactionblockscount > 1) {
+                    if ($instancecounter > 1) {
                         $this->content = new stdClass();
                         $this->content->text = get_string('multipleinstances', 'block_massaction');
                         $this->content->footer = '';
@@ -120,13 +129,19 @@ class block_massaction extends block_base {
                 }
             }
 
+            $modinfo = get_fast_modinfo($COURSE->id);
+            $filtersectionshook = new filter_sections_same_course($COURSE->id, array_keys($modinfo->get_section_info_all()));
+            \core\di::get(\core\hook\manager::class)->dispatch($filtersectionshook);
+            $sectionsavailable = $filtersectionshook->get_sectionnums();
+
             // Initialize the JS module.
             $this->page->requires->js_call_amd('block_massaction/massactionblock', 'init');
 
             $context = context_course::instance($COURSE->id);
             // Actions to be rendered later on.
             $actionicons = [];
-            if (has_capability('moodle/course:activityvisibility', $context)) {
+            if (has_capability('moodle/course:activityvisibility', $context)
+                   && has_capability('block/massaction:activityshowhide', $blockcontext)) {
                 // As we want to use this symbol for the *operation*, not the state, we switch the icons hide/show.
                 $actionicons['show'] = 't/hide';
                 $actionicons['hide'] = 't/show';
@@ -135,24 +150,30 @@ class block_massaction extends block_base {
                 }
             }
             if (has_capability('moodle/backup:backuptargetimport', $context)
-                    && has_capability('moodle/restore:restoretargetimport', $context)) {
+                    && has_capability('moodle/restore:restoretargetimport', $context)
+                    && has_capability('block/massaction:duplicate', $blockcontext)) {
                 $actionicons['duplicate'] = 't/copy';
             }
-            if (has_capability('moodle/backup:backuptargetimport', $context)) {
+            if (has_capability('moodle/backup:backuptargetimport', $context)
+                    && has_capability('block/massaction:duplicatetocourse', $blockcontext)) {
                 $actionicons['duplicatetocourse'] = 't/copy';
             }
             if (has_capability('moodle/course:manageactivities', $context)) {
-                $actionicons['delete'] = 't/delete';
-                if (course_get_format($COURSE->id)->uses_indentation()) {
+                if (has_capability('block/massaction:delete', $blockcontext)) {
+                    $actionicons['delete'] = 't/delete';
+                }
+                if (course_get_format($COURSE->id)->uses_indentation()
+                        && has_capability('block/massaction:indent', $blockcontext)) {
                     // From Moodle 4.0 on the course format has to declare if it supports indentation or not.
                     $actionicons['moveright'] = 't/right';
                     $actionicons['moveleft'] = 't/left';
                 }
-                $actionicons['showdescription'] = 't/more';
-                $actionicons['hidedescription'] = 't/less';
+                if (has_capability('block/massaction:descriptionshowhide', $blockcontext)) {
+                    $actionicons['showdescription'] = 't/more';
+                    $actionicons['hidedescription'] = 't/less';
+                }
             }
-            if (has_capability('block/massaction:sendcontentchangednotifications',
-                    context_block::instance($this->instance->id))) {
+            if (has_capability('block/massaction:sendcontentchangednotifications', $blockcontext)) {
                 $actionicons['contentchangednotification'] = 't/email';
             }
 
@@ -163,13 +184,17 @@ class block_massaction extends block_base {
             }
 
             $this->content->text = $OUTPUT->render_from_template('block_massaction/block_massaction',
-                ['actions' => $actions, 'formaction' => $CFG->wwwroot . '/blocks/massaction/action.php',
-                    'instanceid' => $this->instance->id, 'requesturi' => $_SERVER['REQUEST_URI'],
-                    'helpicon' => $OUTPUT->help_icon('usage', 'block_massaction'),
-                    'show_moveto_select' => has_capability('moodle/course:manageactivities', $context),
-                    'show_duplicateto_select' => (has_capability('moodle/backup:backuptargetimport', $context) &&
-                        has_capability('moodle/restore:restoretargetimport', $context)),
-                    'sectionselecthelpicon' => $OUTPUT->help_icon('sectionselect', 'block_massaction')
+                ['actions' => $actions,
+                  'formaction' => $CFG->wwwroot . '/blocks/massaction/action.php',
+                  'instanceid' => $this->instance->id, 'requesturi' => $_SERVER['REQUEST_URI'],
+                  'helpicon' => $OUTPUT->help_icon('usage', 'block_massaction'),
+                  'show_moveto_select' => (has_capability('moodle/course:manageactivities', $context) &&
+                                           has_capability('block/massaction:movetosection', $context)),
+                  'show_duplicateto_select' => (has_capability('moodle/backup:backuptargetimport', $context) &&
+                                                has_capability('moodle/restore:restoretargetimport', $context) &&
+                                                has_capability('block/massaction:movetosection', $context)),
+                  'sectionselecthelpicon' => $OUTPUT->help_icon('sectionselect', 'block_massaction'),
+                    'availabletargetsections' => implode(',', $sectionsavailable),
                 ]);
         }
         return $this->content;

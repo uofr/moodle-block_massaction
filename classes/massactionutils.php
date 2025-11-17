@@ -159,6 +159,9 @@ class massactionutils {
                 }
             }
         }
+        if (empty($newcmid)) {
+            throw new \moodle_exception('duplicatefailed', 'block_massaction', $cm->id);
+        }
         return $newcmid;
     }
 }
